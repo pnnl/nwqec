@@ -1,0 +1,11 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+if(@NWQEC_WITH_GRIDSYNTH@)
+  find_dependency(GMP QUIET)
+  find_dependency(MPFR QUIET)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/NWQECTargets.cmake")
+

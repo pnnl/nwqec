@@ -1,0 +1,34 @@
+[build-system]
+requires = [
+  "scikit-build-core>=0.10",
+  "pybind11>=2.10",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "nwqec"
+version = "1.0.0"
+description = "NWQEC: C++ quantum circuit transpiler with Python bindings"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Proprietary or project-specific" }
+authors = [{ name = "NWQEC Authors" }]
+keywords = ["quantum", "transpiler", "circuits", "clifford", "t"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: C++",
+  "License :: Other/Proprietary License",
+  "Operating System :: OS Independent",
+]
+
+[tool.scikit-build]
+cmake.minimum-version = "3.16"
+cmake.build-type = "Release"
+build-dir = "skbuild/{wheel_tag}"
+wheel.expand-macos-universal-tags = true
+wheel.packages = ["python/nwqec"]
+logging.level = "INFO"
+
+[tool.scikit-build.cmake.define]
+NWQEC_BUILD_PYTHON = true
+
