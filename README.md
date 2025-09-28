@@ -78,8 +78,31 @@ print(f"Depth reduction of TACO over PBC: {pbc.depth() / taco.depth():.2f}x")
 3. Sean Garner, Chenxu Liu, Meng Wang, Samuel Stein, and Ang Li. "STABSim: A Parallelized Clifford Simulator with Features Beyond Direct Simulation." arXiv preprint arXiv:2507.03092 (2025).
 4. Meng Wang, Chenxu Liu, Samuel Stein, Yufei Ding, Poulami Das, Prashant J. Nair, and Ang Li. "Optimizing FTQC Programs through QEC Transpiler and Architecture Codesign." arXiv preprint arXiv:2412.15434 (2024).
 
+## Citation format
+
+Please cite our papers:
+ - Meng Wang, Chenxu Liu, Samuel Stein, Yufei Ding, Poulami Das, Prashant J. Nair, and Ang Li. "Optimizing FTQC Programs through QEC Transpiler and Architecture Codesign." arXiv preprint arXiv:2412.15434 (2024).
+ - Meng Wang, Chenxu Liu, Sean Garner, Samuel Stein, Yufei Ding, Prashant J. Nair, and Ang Li. "Tableau-Based Framework for Efficient Logical Quantum Compilation." arXiv preprint arXiv:2509.02721 (2025).
+
+Bibtex:
+```text
+@article{wang2024optimizing,
+  title={Optimizing FTQC Programs through QEC Transpiler and Architecture Codesign},
+  author={Wang, Meng and Liu, Chenxu and Stein, Samuel and Ding, Yufei and Das, Poulami and Nair, Prashant J and Li, Ang},
+  journal={arXiv preprint arXiv:2412.15434},
+  year={2024}
+}
+@article{wang2025tableau,
+  title={Tableau-Based Framework for Efficient Logical Quantum Compilation},
+  author={Wang, Meng and Liu, Chenxu and Garner, Sean and Stein, Samuel and Ding, Yufei and Nair, Prashant J and Li, Ang},
+  journal={arXiv preprint arXiv:2509.02721},
+  year={2025}
+}
+``` 
+
+
 ## Acknowledgments
 
 **PNNL-IPID: 33474-E, iEdison No. 0685901-25-0171**
 
-The development of this software is supported by the U.S. Department of Energy, Office of Science, National Quantum Information Science Research Centers, Co-design Center for Quantum Advantage (C2QA) under contract number DE-SC0012704, (Basic Energy Sciences, PNNL FWP 76274). It is supported by the U.S. Department of Energy, Office of Science, National Quantum Information Science Research Centers, Quantum Science Center (QSC). The development used resources of the National Energy Research Scientific Computing Center (NERSC), a U.S. Department of Energy Office of Science User Facility located at Lawrence Berkeley National Laboratory, operated under Contract No. DE-AC02-05CH11231. The development used resources of the Oak Ridge Leadership Computing Facility, which is a DOE Office of Science User Facility supported under Contract DE-AC05-00OR22725. This software was also supported by the Quantum Algorithms and Architecture for Domain Science Initiative (QuAADS), under the Laboratory Directed Research and Development (LDRD) Program at Pacific Northwest National Laboratory (PNNL). PNNL is a multi-program national laboratory operated for the U.S. Department of Energy (DOE) by Battelle Memorial Institute under Contract No. DE-AC05-76RL01830.
+The development of this software was supported by the U.S. Department of Energy, Office of Science, National Quantum Information Science Research Centers, Co-design Center for Quantum Advantage (C2QA) under contract number DE-SC0012704, (Basic Energy Sciences, PNNL FWP 76274). It was supported by the U.S. Department of Energy, Office of Science, National Quantum Information Science Research Centers, Quantum Science Center (QSC). The development used resources of the National Energy Research Scientific Computing Center (NERSC), a U.S. Department of Energy Office of Science User Facility located at Lawrence Berkeley National Laboratory, operated under Contract No. DE-AC02-05CH11231. The development used resources of the Oak Ridge Leadership Computing Facility, which is a DOE Office of Science User Facility supported under Contract DE-AC05-00OR22725. This software was also supported by the Quantum Algorithms and Architecture for Domain Science Initiative (QuAADS), under the Laboratory Directed Research and Development (LDRD) Program at Pacific Northwest National Laboratory (PNNL). PNNL is a multi-program national laboratory operated for the U.S. Department of Energy (DOE) by Battelle Memorial Institute under Contract No. DE-AC05-76RL01830.
