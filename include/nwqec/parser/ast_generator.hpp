@@ -7,6 +7,7 @@
 #include <string>
 #include <stdexcept>
 #include <unordered_map>
+#include <limits>
 
 namespace NWQEC
 {
@@ -229,6 +230,48 @@ namespace NWQEC
             return std::make_unique<IncludeStmt>(filename);
         }
 
+        size_t parse_register_size(const Token &size_token)
+        {
+            try
+            {
+                unsigned long long raw = std::stoull(size_token.lexeme);
+                if (raw > std::numeric_limits<size_t>::max())
+                {
+                    throw ParseError("Register size " + size_token.lexeme + " exceeds supported range.",
+                                     size_token.line, size_token.column);
+                }
+                return static_cast<size_t>(raw);
+            }
+            catch (const std::invalid_argument &)
+            {
+                throw ParseError("Invalid register size: " + size_token.lexeme + ".",
+                                 size_token.line, size_token.column);
+            }
+            catch (const std::out_of_range &)
+            {
+                throw ParseError("Register size " + size_token.lexeme + " is out of range.",
+                                 size_token.line, size_token.column);
+            }
+        }
+
+        long long parse_integer_literal(const Token &token)
+        {
+            try
+            {
+                return std::stoll(token.lexeme);
+            }
+            catch (const std::invalid_argument &)
+            {
+                throw ParseError("Invalid integer literal: " + token.lexeme + ".",
+                                 token.line, token.column);
+            }
+            catch (const std::out_of_range &)
+            {
+                throw ParseError("Integer literal " + token.lexeme + " is out of range.",
+                                 token.line, token.column);
+            }
+        }
+
         std::unique_ptr<Stmt> qreg_declaration()
         {
             Token name_token = consume(TokenType::IDENTIFIER, "Expected register name after qreg.");
@@ -236,7 +279,7 @@ namespace NWQEC
 
             consume(TokenType::LBRACKET, "Expected '[' after register name.");
             Token size_token = consume(TokenType::INTEGER, "Expected size after '['.");
-            int size = std::stoi(size_token.lexeme);
+            size_t size = parse_register_size(size_token);
             consume(TokenType::RBRACKET, "Expected ']' after size.");
             consume(TokenType::SEMICOLON, "Expected ';' after register declaration.");
 
@@ -250,7 +293,7 @@ namespace NWQEC
 
             consume(TokenType::LBRACKET, "Expected '[' after register name.");
             Token size_token = consume(TokenType::INTEGER, "Expected size after '['.");
-            int size = std::stoi(size_token.lexeme);
+            size_t size = parse_register_size(size_token);
             consume(TokenType::RBRACKET, "Expected ']' after size.");
             consume(TokenType::SEMICOLON, "Expected ';' after register declaration.");
 
@@ -419,7 +462,7 @@ namespace NWQEC
 
             std::unique_ptr<Stmt> then_branch = statement();
 
-            return std::make_unique<IfStmt>(creg_token.lexeme, std::stoi(value_token.lexeme), std::move(then_branch));
+            return std::make_unique<IfStmt>(creg_token.lexeme, parse_integer_literal(value_token), std::move(then_branch));
         }
 
         std::unique_ptr<Stmt> block_statement()
@@ -594,7 +637,7 @@ namespace NWQEC
         {
             if (match({TokenType::INTEGER}))
             {
-                int value = std::stoi(previous().lexeme);
+                long long value = parse_integer_literal(previous());
                 return std::make_unique<NumberExpr>(static_cast<double>(value), true);
             }
 
