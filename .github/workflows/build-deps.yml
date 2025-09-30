@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
   push:
   pull_request:
+  workflow_call:
 
 env:
   GMP_VERSION: "6.3.0"
-  MPFR_VERSION: "4.2.1"
+  MPFR_VERSION: "4.2.2"
 
 jobs:
   build-prebuilts:
@@ -58,38 +59,6 @@ jobs:
         run: |
           set -euxo pipefail
 
-          download_with_retry() {
-            local url="$1"
-            local output="$2"
-            local attempts=5
-            local delay=10
-            local count=1
-            rm -f "${output}.part"
-            while [ "$count" -le "$attempts" ]; do
-              if curl --fail --location --silent --show-error --output "${output}.part" "$url"; then
-                mv "${output}.part" "$output"
-                return 0
-              fi
-              echo "Download failed for $url (attempt $count/$attempts). Retrying in ${delay}s..." >&2
-              count=$((count + 1))
-              sleep "$delay"
-            done
-            return 1
-          }
-
-          download_with_mirrors() {
-            local output="$1"
-            shift
-            for url in "$@"; do
-              echo "Attempting to download $output from $url"
-              if download_with_retry "$url" "$output"; then
-                return 0
-              fi
-            done
-            echo "Failed to download $output from all mirrors" >&2
-            exit 1
-          }
-
           JOBS=1
           if command -v nproc >/dev/null 2>&1; then
             JOBS=$(nproc)
@@ -105,22 +74,28 @@ jobs:
 
           cd "${SRC_DIR}"
 
-          download_with_mirrors "gmp-${GMP_VERSION}.tar.xz" \
-            "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz" \
-            "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz" \
-            "https://ftpmirror.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz"
-          tar -xf "gmp-${GMP_VERSION}.tar.xz"
+          THIRD_PARTY_DIR="${GITHUB_WORKSPACE}/third_party"
+          GMP_ARCHIVE="${THIRD_PARTY_DIR}/gmp-${GMP_VERSION}.tar.xz"
+          MPFR_ARCHIVE="${THIRD_PARTY_DIR}/mpfr-${MPFR_VERSION}.tar.xz"
+
+          if [ ! -f "${GMP_ARCHIVE}" ]; then
+            echo "Missing GMP archive at ${GMP_ARCHIVE}" >&2
+            exit 1
+          fi
+
+          if [ ! -f "${MPFR_ARCHIVE}" ]; then
+            echo "Missing MPFR archive at ${MPFR_ARCHIVE}" >&2
+            exit 1
+          fi
+
+          tar -xf "${GMP_ARCHIVE}"
           cd "gmp-${GMP_VERSION}"
           ./configure --prefix="${INSTALL_PREFIX}" --enable-static --disable-shared
           make -j"${JOBS}"
           make install
           cd ..
 
-          download_with_mirrors "mpfr-${MPFR_VERSION}.tar.xz" \
-            "https://www.mpfr.org/mpfr-${MPFR_VERSION}/mpfr-${MPFR_VERSION}.tar.xz" \
-            "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VERSION}.tar.xz" \
-            "https://ftpmirror.gnu.org/mpfr/mpfr-${MPFR_VERSION}.tar.xz"
-          tar -xf "mpfr-${MPFR_VERSION}.tar.xz"
+          tar -xf "${MPFR_ARCHIVE}"
           cd "mpfr-${MPFR_VERSION}"
           export CPPFLAGS="-I${INSTALL_PREFIX}/include"
           export LDFLAGS="-L${INSTALL_PREFIX}/lib"
@@ -140,38 +115,6 @@ jobs:
         run: |
           set -euxo pipefail
 
-          download_with_retry() {
-            local url="$1"
-            local output="$2"
-            local attempts=5
-            local delay=10
-            local count=1
-            rm -f "${output}.part"
-            while [ "$count" -le "$attempts" ]; do
-              if curl --fail --location --silent --show-error --output "${output}.part" "$url"; then
-                mv "${output}.part" "$output"
-                return 0
-              fi
-              echo "Download failed for $url (attempt $count/$attempts). Retrying in ${delay}s..." >&2
-              count=$((count + 1))
-              sleep "$delay"
-            done
-            return 1
-          }
-
-          download_with_mirrors() {
-            local output="$1"
-            shift
-            for url in "$@"; do
-              echo "Attempting to download $output from $url"
-              if download_with_retry "$url" "$output"; then
-                return 0
-              fi
-            done
-            echo "Failed to download $output from all mirrors" >&2
-            exit 1
-          }
-
           export PATH="/mingw64/bin:$PATH"
 
           JOBS=1
@@ -187,22 +130,29 @@ jobs:
 
           cd "$SRC_DIR"
 
-          download_with_mirrors "gmp-${GMP_VERSION}.tar.xz" \
-            "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz" \
-            "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz" \
-            "https://ftpmirror.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz"
-          tar -xf "gmp-${GMP_VERSION}.tar.xz"
+          WORKSPACE_PATH="$(cygpath "$GITHUB_WORKSPACE")"
+          THIRD_PARTY_DIR="$WORKSPACE_PATH/third_party"
+          GMP_ARCHIVE="$THIRD_PARTY_DIR/gmp-${GMP_VERSION}.tar.xz"
+          MPFR_ARCHIVE="$THIRD_PARTY_DIR/mpfr-${MPFR_VERSION}.tar.xz"
+
+          if [ ! -f "$GMP_ARCHIVE" ]; then
+            echo "Missing GMP archive at $GMP_ARCHIVE" >&2
+            exit 1
+          fi
+
+          if [ ! -f "$MPFR_ARCHIVE" ]; then
+            echo "Missing MPFR archive at $MPFR_ARCHIVE" >&2
+            exit 1
+          fi
+
+          tar -xf "$GMP_ARCHIVE"
           cd "gmp-${GMP_VERSION}"
           ABI=64 ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --enable-static --disable-shared --disable-assembly
           make -j"$JOBS"
           make install
           cd ..
 
-          download_with_mirrors "mpfr-${MPFR_VERSION}.tar.xz" \
-            "https://www.mpfr.org/mpfr-${MPFR_VERSION}/mpfr-${MPFR_VERSION}.tar.xz" \
-            "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VERSION}.tar.xz" \
-            "https://ftpmirror.gnu.org/mpfr/mpfr-${MPFR_VERSION}.tar.xz"
-          tar -xf "mpfr-${MPFR_VERSION}.tar.xz"
+          tar -xf "$MPFR_ARCHIVE"
           cd "mpfr-${MPFR_VERSION}"
           export CPPFLAGS="-I$INSTALL_PREFIX/include"
           export LDFLAGS="-L$INSTALL_PREFIX/lib"
