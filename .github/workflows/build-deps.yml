@@ -117,10 +117,11 @@ jobs:
 
           export PATH="/mingw64/bin:$PATH"
 
-          export CC="x86_64-w64-mingw32-gcc -static-libgcc -static-libstdc++"
-          export CXX="x86_64-w64-mingw32-g++ -static-libgcc -static-libstdc++"
-          export CFLAGS="-O2 -pipe"
-          export CXXFLAGS="-O2 -pipe"
+          export CC="x86_64-w64-mingw32-gcc"
+          export CXX="x86_64-w64-mingw32-g++"
+          export CPPFLAGS="-D__USE_MINGW_ANSI_STDIO"
+          export CFLAGS="-O2 -pipe -static-libgcc"
+          export CXXFLAGS="-O2 -pipe -static-libgcc -static-libstdc++"
 
           JOBS=1
           if command -v nproc >/dev/null 2>&1; then
@@ -152,7 +153,7 @@ jobs:
 
           tar -xf "$GMP_ARCHIVE"
           cd "gmp-${GMP_VERSION}"
-          ABI=64 ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --enable-static --disable-shared --disable-assembly --disable-fat --disable-minithres --disable-profiling
+          ABI=64 ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --enable-static --disable-shared --disable-assembly --disable-fat --disable-minithres --disable-profiling --with-gnu-ld || { cat config.log; exit 1; }
           make -j"$JOBS"
           make install
           cd ..
