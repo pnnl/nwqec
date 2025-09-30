@@ -107,7 +107,8 @@ jobs:
 
           download_with_mirrors "gmp-${GMP_VERSION}.tar.xz" \
             "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz" \
-            "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz"
+            "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz" \
+            "https://ftpmirror.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz"
           tar -xf "gmp-${GMP_VERSION}.tar.xz"
           cd "gmp-${GMP_VERSION}"
           ./configure --prefix="${INSTALL_PREFIX}" --enable-static --disable-shared
@@ -117,7 +118,8 @@ jobs:
 
           download_with_mirrors "mpfr-${MPFR_VERSION}.tar.xz" \
             "https://www.mpfr.org/mpfr-${MPFR_VERSION}/mpfr-${MPFR_VERSION}.tar.xz" \
-            "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VERSION}.tar.xz"
+            "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VERSION}.tar.xz" \
+            "https://ftpmirror.gnu.org/mpfr/mpfr-${MPFR_VERSION}.tar.xz"
           tar -xf "mpfr-${MPFR_VERSION}.tar.xz"
           cd "mpfr-${MPFR_VERSION}"
           export CPPFLAGS="-I${INSTALL_PREFIX}/include"
@@ -187,22 +189,24 @@ jobs:
 
           download_with_mirrors "gmp-${GMP_VERSION}.tar.xz" \
             "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz" \
-            "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz"
+            "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz" \
+            "https://ftpmirror.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz"
           tar -xf "gmp-${GMP_VERSION}.tar.xz"
           cd "gmp-${GMP_VERSION}"
-          ./configure --prefix="$INSTALL_PREFIX" --enable-static --disable-shared
+          ABI=64 ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --enable-static --disable-shared --disable-assembly
           make -j"$JOBS"
           make install
           cd ..
 
           download_with_mirrors "mpfr-${MPFR_VERSION}.tar.xz" \
             "https://www.mpfr.org/mpfr-${MPFR_VERSION}/mpfr-${MPFR_VERSION}.tar.xz" \
-            "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VERSION}.tar.xz"
+            "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VERSION}.tar.xz" \
+            "https://ftpmirror.gnu.org/mpfr/mpfr-${MPFR_VERSION}.tar.xz"
           tar -xf "mpfr-${MPFR_VERSION}.tar.xz"
           cd "mpfr-${MPFR_VERSION}"
           export CPPFLAGS="-I$INSTALL_PREFIX/include"
           export LDFLAGS="-L$INSTALL_PREFIX/lib"
-          ./configure --prefix="$INSTALL_PREFIX" --with-gmp="$INSTALL_PREFIX" --enable-static --disable-shared
+          ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --with-gmp="$INSTALL_PREFIX" --enable-static --disable-shared
           make -j"$JOBS"
           make install
           cd ..
