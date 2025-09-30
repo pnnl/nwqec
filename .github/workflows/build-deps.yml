@@ -120,8 +120,10 @@ jobs:
           export CC="x86_64-w64-mingw32-gcc"
           export CXX="x86_64-w64-mingw32-g++"
           export CPPFLAGS="-D__USE_MINGW_ANSI_STDIO"
-          export CFLAGS="-O2 -pipe -static-libgcc -std=gnu89"
-          export CXXFLAGS="-O2 -pipe -static-libgcc -static-libstdc++ -std=gnu++98"
+          CONFIG_CFLAGS="-O2 -pipe -static-libgcc -std=gnu89"
+          BUILD_CFLAGS="-O2 -pipe -static-libgcc -std=gnu11"
+          CONFIG_CXXFLAGS="-O2 -pipe -static-libgcc -static-libstdc++ -std=gnu++98"
+          BUILD_CXXFLAGS="-O2 -pipe -static-libgcc -static-libstdc++ -std=gnu++17"
 
           JOBS=1
           if command -v nproc >/dev/null 2>&1; then
@@ -153,18 +155,18 @@ jobs:
 
           tar -xf "$GMP_ARCHIVE"
           cd "gmp-${GMP_VERSION}"
-          ABI=64 ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --enable-static --disable-shared --disable-assembly --disable-fat --disable-minithres --disable-profiling --with-gnu-ld || { cat config.log; exit 1; }
-          make -j"$JOBS"
-          make install
+          ABI=64 CFLAGS="$CONFIG_CFLAGS" CXXFLAGS="$CONFIG_CXXFLAGS" ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --enable-static --disable-shared --disable-assembly --disable-fat --disable-minithres --disable-profiling --with-gnu-ld || { cat config.log; exit 1; }
+          make CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" -j"$JOBS"
+          make CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" install
           cd ..
 
           tar -xf "$MPFR_ARCHIVE"
           cd "mpfr-${MPFR_VERSION}"
           export CPPFLAGS="-I$INSTALL_PREFIX/include"
           export LDFLAGS="-L$INSTALL_PREFIX/lib"
-          ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --with-gmp="$INSTALL_PREFIX" --enable-static --disable-shared
-          make -j"$JOBS"
-          make install
+          CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --with-gmp="$INSTALL_PREFIX" --enable-static --disable-shared
+          make CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" -j"$JOBS"
+          make CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" install
           cd ..
 
           BUNDLE_NAME="gmp-${GMP_VERSION}_mpfr-${MPFR_VERSION}_${ARTIFACT_SUFFIX}"
