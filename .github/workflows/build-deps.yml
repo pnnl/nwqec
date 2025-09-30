@@ -152,7 +152,7 @@ jobs:
 
           tar -xf "$GMP_ARCHIVE"
           cd "gmp-${GMP_VERSION}"
-          ABI=64 ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --enable-static --disable-shared --disable-assembly --disable-fat --with-pic --enable-minithres=10 --disable-profiling
+          ABI=64 ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --enable-static --disable-shared --disable-assembly --disable-fat --disable-minithres --disable-profiling
           make -j"$JOBS"
           make install
           cd ..
