@@ -1,7 +1,3 @@
-#ifndef NWQEC_WITH_GRIDSYNTH_CPP
-#define NWQEC_WITH_GRIDSYNTH_CPP 0
-#endif
-
 #pragma once
 
 #include "nwqec/core/circuit.hpp"
@@ -11,9 +7,7 @@
 
 #include "nwqec/passes/decompose_pass.hpp"
 #include "nwqec/passes/remove_trivial_rz_pass.hpp"
-#if NWQEC_WITH_GRIDSYNTH_CPP
 #include "nwqec/passes/synthesize_rz_pass.hpp"
-#endif
 #include "nwqec/passes/gate_fusion_pass.hpp"
 #include "nwqec/passes/tfuse_pass.hpp"
 #include "nwqec/passes/remove_pauli_pass.hpp"
@@ -227,10 +221,8 @@ namespace NWQEC
                 []()
                 { return std::make_unique<RemoveTrivialRzPass>(); },
             };
-#if NWQEC_WITH_GRIDSYNTH_CPP
             passes.push_back([epsilon_override]()
                              { return std::make_unique<SynthesizeRzPass>(epsilon_override); });
-#endif
             return passes;
         }
 

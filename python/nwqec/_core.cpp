@@ -73,7 +73,7 @@ namespace
         return false;
     }
 
-    // Internal helper to run transforms with optional Python RZ synthesis fallback
+    // Internal helper to run transforms (requires native gridsynth backend)
     std::unique_ptr<NWQEC::Circuit> apply_transforms(const NWQEC::Circuit &circuit,
                                                      bool to_pbc,
                                                      bool to_clifford_reduction,
@@ -88,100 +88,6 @@ namespace
         auto up = std::make_unique<NWQEC::Circuit>(circuit); // copy for ownership
         auto out = pm.apply_passes(std::move(up), to_pbc, to_clifford_reduction, keep_cx, t_pauli_opt, remove_pauli, keep_ccx, silent, epsilon_override);
 
-#if !NWQEC_WITH_GRIDSYNTH_CPP
-        // Attempt transparent Python fallback for RZ synthesis if needed
-        bool has_rz = false;
-        for (const auto &op : out->get_operations())
-        {
-            if (op.get_type() == NWQEC::Operation::Type::RZ)
-            {
-                has_rz = true;
-                break;
-            }
-        }
-        if (has_rz)
-        {
-            try
-            {
-                // Defaults for fallback
-                const int dps = NWQEC::DEFAULT_MPMATH_DPS;
-                const char *module_name = "pygridsynth.gridsynth";
-
-                py::module_ mp = py::module_::import("mpmath");
-                mp.attr("mp").attr("dps") = dps; // precision
-                py::object mpmathify = mp.attr("mpmathify");
-                py::module_ mod = py::module_::import(module_name);
-                if (!py::hasattr(mod, "gridsynth_gates"))
-                {
-                    throw std::runtime_error("pygridsynth module missing 'gridsynth_gates'");
-                }
-                py::object gridsynth_gates = mod.attr("gridsynth_gates");
-
-                auto new_circuit = std::make_unique<NWQEC::Circuit>();
-                new_circuit->add_qreg("q", out->get_num_qubits());
-                new_circuit->add_creg("c", out->get_num_bits());
-
-                const auto &ops = out->get_operations();
-                for (const auto &op : ops)
-                {
-                    if (op.get_type() != NWQEC::Operation::Type::RZ)
-                    {
-                        new_circuit->add_operation(op);
-                        continue;
-                    }
-                    const auto &params = op.get_parameters();
-                    if (params.empty())
-                        continue;
-                    std::string theta_str = std::to_string(params[0]);
-                    // Determine epsilon per angle: default to 2 orders smaller than theta, or use override if provided
-                    double eps_val = (epsilon_override >= 0.0) ? epsilon_override : std::abs(params[0]) * NWQEC::DEFAULT_EPSILON_MULTIPLIER;
-                    std::ostringstream eps_ss;
-                    eps_ss.setf(std::ios::scientific);
-                    eps_ss << std::setprecision(16) << eps_val;
-                    std::string eps_str = eps_ss.str();
-                    py::object theta = mpmathify(theta_str);
-                    py::object epsilon = mpmathify(eps_str);
-                    std::string gates = py::cast<std::string>(gridsynth_gates(theta, epsilon));
-                    const auto &qs = op.get_qubits();
-                    for (const char &g : gates)
-                    {
-                        switch (g)
-                        {
-                        case 'X':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::X, qs));
-                            break;
-                        case 'Y':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::Y, qs));
-                            break;
-                        case 'Z':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::Z, qs));
-                            break;
-                        case 'H':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::H, qs));
-                            break;
-                        case 'S':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::S, qs));
-                            break;
-                        case 'T':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::T, qs));
-                            break;
-                        case 'W':
-                            break;
-                        default:
-                            throw std::runtime_error(std::string("Unknown gate from pygridsynth: ") + g);
-                        }
-                    }
-                }
-                out = std::move(new_circuit);
-            }
-            catch (const std::exception &)
-            {
-                // Neither C++ gridsynth nor pygridsynth available
-                std::cerr << "RZ synthesis not available. Install GMP+MPFR and reinstall the module, or `pip install pygridsynth mpmath`.\n";
-            }
-        }
-#endif
-
         return out;
     }
 }
@@ -190,11 +96,7 @@ PYBIND11_MODULE(_core, m)
 {
     m.doc() = "NWQEC Python bindings";
 
-#if NWQEC_WITH_GRIDSYNTH_CPP
     m.attr("WITH_GRIDSYNTH_CPP") = py::bool_(true);
-#else
-    m.attr("WITH_GRIDSYNTH_CPP") = py::bool_(false);
-#endif
 
     // Circuit class (owned by Python via unique_ptr)
     py::class_<NWQEC::Circuit, std::unique_ptr<NWQEC::Circuit>>(m, "Circuit")

@@ -7,7 +7,7 @@ Module Constants
 ----------------
 - `WITH_GRIDSYNTH_CPP: bool`
   - `True` if the package was built with the C++ gridsynth backend (GMP/MPFR detected at build time).
-  - `False` if installed with `-DNWQEC_ALLOW_NO_GMP=ON`; RZ synthesis uses the Python fallback when available.
+  - `False` only if the build was explicitly configured without GMP/MPFR support; in that case RZ synthesis is handled in pure Python.
 - `__version__: str`
   - Package version string.
 

@@ -14,7 +14,7 @@ NWQEC is a C++/Python toolkit for fault-tolerant quantum circuit transpilation. 
 - C++17 toolchain and CMake ≥ 3.16
 - Python build dependencies: `scikit-build-core`, `pybind11`
 - Recommended: GMP and MPFR for the C++ gridsynth backend
-- Fallback mode (optional): `pygridsynth` and `mpmath` when installing without GMP/MPFR
+- Bundled alternatives: prebuilt GMP/MPFR archives are automatically downloaded on Linux x86_64, macOS arm64, and Windows x86_64 when system packages are unavailable
 
 ## Installing GMP/MPFR
 - macOS (Homebrew): `brew install gmp mpfr`
@@ -30,12 +30,7 @@ pip install -U pip
 pip install scikit-build-core pybind11
 pip install .
 ```
-If GMP/MPFR are not available the build will stop with a highlighted message. Either install the libraries (see above) or opt into the Python fallback:
-```bash
-pip install . --config-settings=cmake.define.NWQEC_ALLOW_NO_GMP=ON
-pip install pygridsynth mpmath  # required for fallback RZ synthesis
-```
-Install GMP/MPFR later and reinstall without the flag to restore the C++ gridsynth backend.
+If GMP/MPFR are not available, CMake automatically downloads the matching prebuilt bundle from the NWQEC release assets and links against it. To force the bundled path (for reproducible builds) set `-DNWQEC_FORCE_BUNDLED_GMP_MPFR=ON`. Custom archives can be supplied via `-DNWQEC_GMP_MPFR_BUNDLE_URL_OVERRIDE=<url>` and the optional `..._HASH_OVERRIDE=<sha256>`.
 
 
 ## Quick Start (Python)
