@@ -57,6 +57,39 @@ jobs:
           ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
         run: |
           set -euxo pipefail
+
+          download_with_retry() {
+            local url="$1"
+            local output="$2"
+            local attempts=5
+            local delay=10
+            local count=1
+            rm -f "${output}.part"
+            while [ "$count" -le "$attempts" ]; do
+              if curl --fail --location --silent --show-error --output "${output}.part" "$url"; then
+                mv "${output}.part" "$output"
+                return 0
+              fi
+              echo "Download failed for $url (attempt $count/$attempts). Retrying in ${delay}s..." >&2
+              count=$((count + 1))
+              sleep "$delay"
+            done
+            return 1
+          }
+
+          download_with_mirrors() {
+            local output="$1"
+            shift
+            for url in "$@"; do
+              echo "Attempting to download $output from $url"
+              if download_with_retry "$url" "$output"; then
+                return 0
+              fi
+            done
+            echo "Failed to download $output from all mirrors" >&2
+            exit 1
+          }
+
           JOBS=1
           if command -v nproc >/dev/null 2>&1; then
             JOBS=$(nproc)
@@ -72,7 +105,9 @@ jobs:
 
           cd "${SRC_DIR}"
 
-          curl -fsSLO "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz"
+          download_with_mirrors "gmp-${GMP_VERSION}.tar.xz" \
+            "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz" \
+            "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz"
           tar -xf "gmp-${GMP_VERSION}.tar.xz"
           cd "gmp-${GMP_VERSION}"
           ./configure --prefix="${INSTALL_PREFIX}" --enable-static --disable-shared
@@ -80,7 +115,9 @@ jobs:
           make install
           cd ..
 
-          curl -fsSLO "https://www.mpfr.org/mpfr-${MPFR_VERSION}/mpfr-${MPFR_VERSION}.tar.xz"
+          download_with_mirrors "mpfr-${MPFR_VERSION}.tar.xz" \
+            "https://www.mpfr.org/mpfr-${MPFR_VERSION}/mpfr-${MPFR_VERSION}.tar.xz" \
+            "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VERSION}.tar.xz"
           tar -xf "mpfr-${MPFR_VERSION}.tar.xz"
           cd "mpfr-${MPFR_VERSION}"
           export CPPFLAGS="-I${INSTALL_PREFIX}/include"
@@ -100,6 +137,39 @@ jobs:
           ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
         run: |
           set -euxo pipefail
+
+          download_with_retry() {
+            local url="$1"
+            local output="$2"
+            local attempts=5
+            local delay=10
+            local count=1
+            rm -f "${output}.part"
+            while [ "$count" -le "$attempts" ]; do
+              if curl --fail --location --silent --show-error --output "${output}.part" "$url"; then
+                mv "${output}.part" "$output"
+                return 0
+              fi
+              echo "Download failed for $url (attempt $count/$attempts). Retrying in ${delay}s..." >&2
+              count=$((count + 1))
+              sleep "$delay"
+            done
+            return 1
+          }
+
+          download_with_mirrors() {
+            local output="$1"
+            shift
+            for url in "$@"; do
+              echo "Attempting to download $output from $url"
+              if download_with_retry "$url" "$output"; then
+                return 0
+              fi
+            done
+            echo "Failed to download $output from all mirrors" >&2
+            exit 1
+          }
+
           export PATH="/mingw64/bin:$PATH"
 
           JOBS=1
@@ -115,7 +185,9 @@ jobs:
 
           cd "$SRC_DIR"
 
-          curl -fsSLO "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz"
+          download_with_mirrors "gmp-${GMP_VERSION}.tar.xz" \
+            "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz" \
+            "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz"
           tar -xf "gmp-${GMP_VERSION}.tar.xz"
           cd "gmp-${GMP_VERSION}"
           ./configure --prefix="$INSTALL_PREFIX" --enable-static --disable-shared
@@ -123,7 +195,9 @@ jobs:
           make install
           cd ..
 
-          curl -fsSLO "https://www.mpfr.org/mpfr-${MPFR_VERSION}/mpfr-${MPFR_VERSION}.tar.xz"
+          download_with_mirrors "mpfr-${MPFR_VERSION}.tar.xz" \
+            "https://www.mpfr.org/mpfr-${MPFR_VERSION}/mpfr-${MPFR_VERSION}.tar.xz" \
+            "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VERSION}.tar.xz"
           tar -xf "mpfr-${MPFR_VERSION}.tar.xz"
           cd "mpfr-${MPFR_VERSION}"
           export CPPFLAGS="-I$INSTALL_PREFIX/include"
