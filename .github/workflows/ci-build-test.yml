@@ -86,7 +86,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           ./build-cli/transpiler tests/python/fixtures/fixture_circuit.qasm
-          test -f build-cli/fixture_circuit_transpiled.qasm
+          test -f tests/python/fixtures/fixture_circuit_transpiled.qasm
           ./build-cli/gridsynth pi/32 1e-10
 
       - name: Configure CMake (Windows)
@@ -110,7 +110,7 @@ jobs:
         shell: powershell
         run: |
           & "${{ github.workspace }}\build-cli\transpiler.exe" tests\python\fixtures\fixture_circuit.qasm
-          if (-Not (Test-Path build-cli\fixture_circuit_transpiled.qasm)) { throw "Expected output file missing" }
+          if (-Not (Test-Path tests\python\fixtures\fixture_circuit_transpiled.qasm)) { throw "Expected output file missing" }
           & "${{ github.workspace }}\build-cli\gridsynth.exe" pi/32 1e-10
 
       - name: Pip install project
