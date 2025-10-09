@@ -82,6 +82,11 @@ function(nwqec_pick_library_from_bundle out_var lib_dir base_name)
     if(CMAKE_SHARED_LIBRARY_PREFIX)
         list(APPEND _candidates "${lib_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}${base_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
     endif()
+    list(APPEND _candidates
+        "${lib_dir}/lib${base_name}.a"
+        "${lib_dir}/lib${base_name}.lib"
+        "${lib_dir}/${base_name}.a"
+        "${lib_dir}/${base_name}.lib")
     if(APPLE)
         list(APPEND _candidates "${lib_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}${base_name}.dylib")
     endif()
@@ -99,6 +104,7 @@ function(nwqec_pick_library_from_bundle out_var lib_dir base_name)
 
     file(GLOB _versioned_candidates
         "${lib_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}${base_name}.*"
+        "${lib_dir}/lib${base_name}.*"
         "${lib_dir}/${base_name}.*")
     if(_versioned_candidates)
         list(FILTER _versioned_candidates INCLUDE REGEX "\\.(a|so(\\.[0-9]+)*|dylib|dll|lib)$")

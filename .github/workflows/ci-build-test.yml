@@ -82,6 +82,13 @@ jobs:
         run: |
           cmake --build build-cli --parallel
 
+      - name: Smoke test CLI (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ./build-cli/transpiler --input tests/python/fixtures/fixture_circuit.qasm --clifford-t --output build-cli/fixture_circuit_ct.qasm
+          test -f build-cli/fixture_circuit_ct.qasm
+          ./build-cli/gridsynth pi/8 10
+
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         shell: powershell
@@ -98,6 +105,14 @@ jobs:
         run: |
           cmake --build build-cli --parallel
 
+      - name: Smoke test CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          & "${{ github.workspace }}\build-cli\transpiler.exe" --input tests\python\fixtures\fixture_circuit.qasm --clifford-t --output build-cli\fixture_circuit_ct.qasm
+          if (-Not (Test-Path build-cli\fixture_circuit_ct.qasm)) { throw "Expected output file missing" }
+          & "${{ github.workspace }}\build-cli\gridsynth.exe" pi/8 10
+
       - name: Pip install project
         run: |
           python -m pip install . --config-settings cmake.define.NWQEC_FORCE_BUNDLED_GMP_MPFR=ON
@@ -105,3 +120,7 @@ jobs:
       - name: Verify Python package import
         run: |
           python -c "import nwqec; print('nwqec version:', nwqec.__version__); print('WITH_GRIDSYNTH_CPP:', nwqec.WITH_GRIDSYNTH_CPP)"
+
+      - name: Run Python tests
+        run: |
+          python -m pytest tests/python
