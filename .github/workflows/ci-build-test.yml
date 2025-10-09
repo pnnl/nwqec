@@ -85,9 +85,9 @@ jobs:
       - name: Smoke test CLI (Unix)
         if: runner.os != 'Windows'
         run: |
-          ./build-cli/transpiler tests/python/fixtures/fixture_circuit.qasm --clifford-t -o build-cli/fixture_circuit_ct.qasm
-          test -f build-cli/fixture_circuit_ct.qasm
-          ./build-cli/gridsynth pi/8 10
+          ./build-cli/transpiler tests/python/fixtures/fixture_circuit.qasm
+          test -f build-cli/fixture_circuit_transpiled.qasm
+          ./build-cli/gridsynth pi/32 1e-10
 
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
@@ -109,9 +109,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          & "${{ github.workspace }}\build-cli\transpiler.exe" tests\python\fixtures\fixture_circuit.qasm --clifford-t -o build-cli\fixture_circuit_ct.qasm
-          if (-Not (Test-Path build-cli\fixture_circuit_ct.qasm)) { throw "Expected output file missing" }
-          & "${{ github.workspace }}\build-cli\gridsynth.exe" pi/8 10
+          & "${{ github.workspace }}\build-cli\transpiler.exe" tests\python\fixtures\fixture_circuit.qasm
+          if (-Not (Test-Path build-cli\fixture_circuit_transpiled.qasm)) { throw "Expected output file missing" }
+          & "${{ github.workspace }}\build-cli\gridsynth.exe" pi/32 1e-10
 
       - name: Pip install project
         run: |
