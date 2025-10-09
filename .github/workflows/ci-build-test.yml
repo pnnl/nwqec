@@ -1,0 +1,104 @@
+name: Build and Install (Multi-Platform)
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+  workflow_call:
+
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 4
+
+jobs:
+  compile-and-install:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            os: ubuntu-22.04
+            python-version: '3.11'
+          - name: macOS x86_64
+            os: macos-13
+            python-version: '3.11'
+          - name: macOS arm64
+            os: macos-14
+            python-version: '3.11'
+          - name: Windows x86_64
+            os: windows-latest
+            python-version: '3.11'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ninja-build python3-dev libssl-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ninja
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          choco install ninja --no-progress --yes
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Upgrade pip and wheel
+        run: |
+          python -m pip install --upgrade pip wheel
+
+      - name: Install build frontends
+        run: |
+          python -m pip install scikit-build-core pybind11
+
+      - name: Configure CMake (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -S . -B build-cli \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNWQEC_FORCE_BUNDLED_GMP_MPFR=ON \
+            -DNWQEC_BUILD_PYTHON=OFF
+
+      - name: Build CLI (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cmake --build build-cli --parallel
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          cmake -S . -B build-cli `
+            -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DNWQEC_FORCE_BUNDLED_GMP_MPFR=ON `
+            -DNWQEC_BUILD_PYTHON=OFF
+
+      - name: Build CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          cmake --build build-cli --parallel
+
+      - name: Pip install project
+        run: |
+          python -m pip install . --config-settings cmake.define.NWQEC_FORCE_BUNDLED_GMP_MPFR=ON
+
+      - name: Verify Python package import
+        run: |
+          python -c "import nwqec; print('nwqec version:', nwqec.__version__); print('WITH_GRIDSYNTH_CPP:', nwqec.WITH_GRIDSYNTH_CPP)"
