@@ -428,7 +428,7 @@ int main(int argc, char *argv[])
     {
         std::cerr << "Error during transpilation: " << e.what() << std::endl;
         std::cerr << "This may be due to:" << std::endl;
-        std::cerr << "  - Missing Python dependencies (pygridsynth, mpmath)" << std::endl;
+        
         std::cerr << "  - Invalid circuit structure" << std::endl;
         std::cerr << "  - Insufficient memory for large circuits" << std::endl;
         return 1;
