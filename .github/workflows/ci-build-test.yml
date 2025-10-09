@@ -20,6 +20,9 @@ jobs:
           - name: Linux x86_64
             os: ubuntu-22.04
             python-version: '3.11'
+          - name: Linux ARM64
+            os: ubuntu-22.04-arm
+            python-version: '3.11'
           - name: macOS x86_64
             os: macos-13
             python-version: '3.11'

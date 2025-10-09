@@ -1,0 +1,188 @@
+name: Build Dependency Binaries
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+  workflow_call:
+
+env:
+  GMP_VERSION: "6.3.0"
+  MPFR_VERSION: "4.2.2"
+
+jobs:
+  build-prebuilts:
+    name: Build GMP & MPFR (${{ matrix.artifact_suffix }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_suffix: linux-x86_64
+          - os: ubuntu-22.04-arm
+            artifact_suffix: linux-arm64
+          - os: macos-14
+            artifact_suffix: macos-arm64
+          - os: macos-13
+            artifact_suffix: macos-x86_64
+          - os: windows-latest
+            artifact_suffix: windows-x86_64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libtool m4 texinfo pkg-config
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install automake libtool m4 pkg-config
+
+      - name: Set up MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-pkgconf
+
+      - name: Build GMP and MPFR (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        run: |
+          set -euxo pipefail
+
+          JOBS=1
+          if command -v nproc >/dev/null 2>&1; then
+            JOBS=$(nproc)
+          elif command -v sysctl >/dev/null 2>&1; then
+            JOBS=$(sysctl -n hw.logicalcpu)
+          fi
+
+          ROOT_DIR="${PWD}/prebuilt"
+          INSTALL_PREFIX="${ROOT_DIR}/install"
+          SRC_DIR="${ROOT_DIR}/src"
+          ARTIFACT_DIR="${ROOT_DIR}/artifacts"
+          mkdir -p "${INSTALL_PREFIX}" "${SRC_DIR}" "${ARTIFACT_DIR}"
+
+          cd "${SRC_DIR}"
+
+          THIRD_PARTY_DIR="${GITHUB_WORKSPACE}/third_party"
+          GMP_ARCHIVE="${THIRD_PARTY_DIR}/gmp-${GMP_VERSION}.tar.xz"
+          MPFR_ARCHIVE="${THIRD_PARTY_DIR}/mpfr-${MPFR_VERSION}.tar.xz"
+
+          if [ ! -f "${GMP_ARCHIVE}" ]; then
+            echo "Missing GMP archive at ${GMP_ARCHIVE}" >&2
+            exit 1
+          fi
+
+          if [ ! -f "${MPFR_ARCHIVE}" ]; then
+            echo "Missing MPFR archive at ${MPFR_ARCHIVE}" >&2
+            exit 1
+          fi
+
+          COMMON_CFLAGS="-O2 -fPIC"
+          COMMON_CXXFLAGS="-O2 -fPIC"
+
+          tar -xf "${GMP_ARCHIVE}"
+          cd "gmp-${GMP_VERSION}"
+          CPPFLAGS="${CPPFLAGS:-}" CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" ./configure --prefix="${INSTALL_PREFIX}" --enable-static --disable-shared --with-pic
+          make CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" -j"${JOBS}"
+          make CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" install
+          cd ..
+
+          tar -xf "${MPFR_ARCHIVE}"
+          cd "mpfr-${MPFR_VERSION}"
+          export CPPFLAGS="-I${INSTALL_PREFIX}/include ${CPPFLAGS:-}"
+          export LDFLAGS="-L${INSTALL_PREFIX}/lib ${LDFLAGS:-}"
+          CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" ./configure --prefix="${INSTALL_PREFIX}" --with-gmp="${INSTALL_PREFIX}" --enable-static --disable-shared --with-pic
+          make CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" -j"${JOBS}"
+          make CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" install
+          cd ..
+
+          BUNDLE_NAME="gmp-${GMP_VERSION}_mpfr-${MPFR_VERSION}_${ARTIFACT_SUFFIX}"
+          tar -C "${INSTALL_PREFIX}" -czf "${ARTIFACT_DIR}/${BUNDLE_NAME}.tar.gz" .
+
+      - name: Build GMP and MPFR (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        run: |
+          set -euxo pipefail
+
+          export PATH="/mingw64/bin:$PATH"
+
+          export CC="x86_64-w64-mingw32-gcc"
+          export CXX="x86_64-w64-mingw32-g++"
+          export CPPFLAGS="-D__USE_MINGW_ANSI_STDIO"
+          CONFIG_CFLAGS="-O2 -pipe -static-libgcc -std=gnu89"
+          BUILD_CFLAGS="-O2 -pipe -static-libgcc -std=gnu11"
+          CONFIG_CXXFLAGS="-O2 -pipe -static-libgcc -static-libstdc++ -std=gnu++98"
+          BUILD_CXXFLAGS="-O2 -pipe -static-libgcc -static-libstdc++ -std=gnu++17"
+
+          JOBS=1
+          if command -v nproc >/dev/null 2>&1; then
+            JOBS=$(nproc)
+          fi
+
+          ROOT_DIR="$PWD/prebuilt"
+          INSTALL_PREFIX="$ROOT_DIR/install"
+          SRC_DIR="$ROOT_DIR/src"
+          ARTIFACT_DIR="$ROOT_DIR/artifacts"
+          mkdir -p "$INSTALL_PREFIX" "$SRC_DIR" "$ARTIFACT_DIR"
+
+          cd "$SRC_DIR"
+
+          WORKSPACE_PATH="$(cygpath "$GITHUB_WORKSPACE")"
+          THIRD_PARTY_DIR="$WORKSPACE_PATH/third_party"
+          GMP_ARCHIVE="$THIRD_PARTY_DIR/gmp-${GMP_VERSION}.tar.xz"
+          MPFR_ARCHIVE="$THIRD_PARTY_DIR/mpfr-${MPFR_VERSION}.tar.xz"
+
+          if [ ! -f "$GMP_ARCHIVE" ]; then
+            echo "Missing GMP archive at $GMP_ARCHIVE" >&2
+            exit 1
+          fi
+
+          if [ ! -f "$MPFR_ARCHIVE" ]; then
+            echo "Missing MPFR archive at $MPFR_ARCHIVE" >&2
+            exit 1
+          fi
+
+          tar -xf "$GMP_ARCHIVE"
+          cd "gmp-${GMP_VERSION}"
+          ABI=64 CFLAGS="$CONFIG_CFLAGS" CXXFLAGS="$CONFIG_CXXFLAGS" ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --enable-static --disable-shared --disable-assembly --disable-fat --disable-minithres --disable-profiling --with-gnu-ld || { cat config.log; exit 1; }
+          make CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" -j"$JOBS"
+          make CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" install
+          cd ..
+
+          tar -xf "$MPFR_ARCHIVE"
+          cd "mpfr-${MPFR_VERSION}"
+          export CPPFLAGS="-I$INSTALL_PREFIX/include"
+          export LDFLAGS="-L$INSTALL_PREFIX/lib"
+          CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" ./configure --prefix="$INSTALL_PREFIX" --host=x86_64-w64-mingw32 --build=x86_64-w64-mingw32 --with-gmp="$INSTALL_PREFIX" --enable-static --disable-shared
+          make CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" -j"$JOBS"
+          make CFLAGS="$BUILD_CFLAGS" CXXFLAGS="$BUILD_CXXFLAGS" install
+          cd ..
+
+          BUNDLE_NAME="gmp-${GMP_VERSION}_mpfr-${MPFR_VERSION}_${ARTIFACT_SUFFIX}"
+          tar -C "$INSTALL_PREFIX" -czf "$ARTIFACT_DIR/${BUNDLE_NAME}.tar.gz" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gmp-mpfr-${{ matrix.artifact_suffix }}
+          path: prebuilt/artifacts
+          if-no-files-found: error
+          retention-days: 7

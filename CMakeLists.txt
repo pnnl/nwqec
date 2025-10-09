@@ -237,6 +237,9 @@ target_include_directories(nwqec INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 target_compile_features(nwqec INTERFACE cxx_std_17)
+if(WIN32)
+    target_compile_definitions(nwqec INTERFACE _USE_MATH_DEFINES)
+endif()
 
 # =============================================================================
 # Gridsynth dependency (GMP/MPFR) and target
