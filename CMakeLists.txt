@@ -196,8 +196,8 @@ endif()
 # =============================================================================
 
 if(WIN32)
-    # Windows: Skip GMP/MPFR, use pygridsynth fallback
-    message(STATUS "Windows platform detected: skipping C++ gridsynth, will use pygridsynth fallback")
+    # Windows: Skip GMP/MPFR due to complexity, use pygridsynth fallback
+    message(STATUS "Windows detected: skipping C++ gridsynth (use pygridsynth fallback)")
     set(NWQEC_WITH_GRIDSYNTH OFF)
 else()
     # macOS/Linux: Always use prebuilt GMP/MPFR binaries
@@ -256,11 +256,11 @@ endif()
 # =============================================================================
 
 if(NWQEC_WITH_GRIDSYNTH)
-    add_executable(transpiler tools/transpiler.cpp)
-    set(_NWQEC_CLI_TARGETS transpiler)
-    target_link_libraries(transpiler PRIVATE nwqec_gridsynth)
-    target_compile_definitions(transpiler PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_options(transpiler PRIVATE ${COMMON_COMPILE_OPTIONS})
+    add_executable(nwqec-cli tools/nwqec.cpp)
+    set(_NWQEC_CLI_TARGETS nwqec-cli)
+    target_link_libraries(nwqec-cli PRIVATE nwqec_gridsynth)
+    target_compile_definitions(nwqec-cli PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_options(nwqec-cli PRIVATE ${COMMON_COMPILE_OPTIONS})
 
     add_executable(gridsynth tools/gridsynth.cpp)
     target_link_libraries(gridsynth PRIVATE nwqec_gridsynth)
@@ -305,14 +305,12 @@ endif()
 
 # Status messages
 if(NWQEC_WITH_GRIDSYNTH)
-    message(STATUS "Configured executable: transpiler (with GMP/MPFR gridsynth backend)")
+    message(STATUS "Configured executable: nwqec-cli (with GMP/MPFR gridsynth backend)")
     message(STATUS "Configured executable: gridsynth (with GMP/MPFR)")
 else()
-    message(STATUS "Skipped CLI tools (GMP/MPFR not available on this platform)")
+    message(STATUS "Skipped CLI tools (C++ gridsynth unavailable)")
     message(STATUS "  → Use Python bindings instead: import nwqec")
-    if(WIN32)
-        message(STATUS "  → Windows users can use pygridsynth instead: pip install pygridsynth")
-    endif()
+    message(STATUS "  → For RZ synthesis, install pygridsynth: pip install pygridsynth")
 endif()
 
 # =============================================================================
@@ -320,7 +318,7 @@ endif()
 # =============================================================================
 include(GNUInstallDirs)
 if(NWQEC_WITH_GRIDSYNTH)
-    install(TARGETS transpiler gridsynth
+    install(TARGETS nwqec-cli gridsynth
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
@@ -362,10 +360,10 @@ install(FILES
 # =============================================================================
 include(CTest)
 if(BUILD_TESTING AND NWQEC_WITH_GRIDSYNTH)
-    add_test(NAME transpiler_help
-             COMMAND $<TARGET_FILE:transpiler> --help)
-    add_test(NAME transpiler_qft
-             COMMAND $<TARGET_FILE:transpiler> --qft 4 --no-save)
+    add_test(NAME nwqec_help
+             COMMAND $<TARGET_FILE:nwqec-cli> --help)
+    add_test(NAME nwqec_qft
+             COMMAND $<TARGET_FILE:nwqec-cli> --qft 4 --no-save)
     add_test(NAME gridsynth_basic
              COMMAND $<TARGET_FILE:gridsynth> pi/4 10)
 endif()

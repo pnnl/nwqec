@@ -9,10 +9,11 @@
 #include <iomanip>
 
 #include "nwqec/parser/qasm_parser.hpp"
-#include "nwqec/core/pass_manager.hpp"
 #include "nwqec/core/operation.hpp"
 #include "nwqec/core/pauli_op.hpp"
 #include "nwqec/core/constants.hpp"
+
+#include "nwqec/core/transpiler.hpp"
 
 namespace py = pybind11;
 
@@ -73,7 +74,7 @@ namespace
         return false;
     }
 
-    // Internal helper to run transforms (requires native gridsynth backend)
+    // Helper to run transforms using the new PassManager
     std::unique_ptr<NWQEC::Circuit> apply_transforms(const NWQEC::Circuit &circuit,
                                                      bool to_pbc,
                                                      bool to_clifford_reduction,
@@ -84,18 +85,42 @@ namespace
                                                      bool silent,
                                                      double epsilon_override = -1.0)
     {
+        NWQEC::Transpiler transpiler;
+        NWQEC::PassConfig config;
+        config.keep_ccx = keep_ccx;
+        config.keep_cx = keep_cx;
+        config.epsilon_override = epsilon_override;
+        config.silent = silent;
+        
+        auto circuit_copy = std::make_unique<NWQEC::Circuit>(circuit);
+        
+        // Choose the appropriate pass sequence
+        std::vector<NWQEC::PassType> passes;
+        
+        if (t_pauli_opt) {
+            // Just T-optimization for PBC circuits
+            passes = {NWQEC::PassType::TFUSE};
+        } else if (to_pbc) {
+            passes = NWQEC::PassSequences::TO_PBC_BASIC;
+        } else if (to_clifford_reduction) {
+            passes = NWQEC::PassSequences::CLIFFORD_REDUCTION;
+        } else {
+            // Default: Clifford+T
 #ifdef NWQEC_WITH_GRIDSYNTH_CPP
-        if (!NWQEC_WITH_GRIDSYNTH_CPP) {
-            throw std::runtime_error("C++ gridsynth backend not available on this platform. Use pygridsynth instead.");
-        }
+            passes = NWQEC::PassSequences::TO_CLIFFORD_T;
 #else
-        throw std::runtime_error("C++ gridsynth backend not available on this platform. Use pygridsynth instead.");
+            // Gridsynth not available: use TO_CLIFFORD_T_RZ (stops before synthesis)
+            // Python will handle RZ synthesis with pygridsynth
+            passes = NWQEC::PassSequences::TO_CLIFFORD_T_RZ;
 #endif
-        NWQEC::PassManager pm;
-        auto up = std::make_unique<NWQEC::Circuit>(circuit); // copy for ownership
-        auto out = pm.apply_passes(std::move(up), to_pbc, to_clifford_reduction, keep_cx, t_pauli_opt, remove_pauli, keep_ccx, silent, epsilon_override);
-
-        return out;
+        }
+        
+        // Add cleanup passes if requested
+        if (remove_pauli) {
+            passes.push_back(NWQEC::PassType::REMOVE_PAULI);
+        }
+        
+        return transpiler.execute_passes(std::move(circuit_copy), passes, config);
     }
 }
 

@@ -1,0 +1,14 @@
+[
+{
+  "directory": "/Users/mengwang/Desktop/nwqec/build-python",
+  "command": "/Library/Developer/CommandLineTools/usr/bin/c++ -DNWQEC_WITH_GRIDSYNTH_CPP=1 -DPROJECT_ROOT_DIR=\\\"/Users/mengwang/Desktop/nwqec\\\" -I/Users/mengwang/Desktop/nwqec/include -isystem /Users/mengwang/Desktop/nwqec/build-python/prebuilt_deps/gmp-mpfr-macos-arm64/include -O3 -DNDEBUG -std=c++17 -flto=thin -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk -Wall -Wextra -pedantic -O3 -o CMakeFiles/nwqec-cli.dir/tools/nwqec.cpp.o -c /Users/mengwang/Desktop/nwqec/tools/nwqec.cpp",
+  "file": "/Users/mengwang/Desktop/nwqec/tools/nwqec.cpp",
+  "output": "CMakeFiles/nwqec-cli.dir/tools/nwqec.cpp.o"
+},
+{
+  "directory": "/Users/mengwang/Desktop/nwqec/build-python",
+  "command": "/Library/Developer/CommandLineTools/usr/bin/c++ -DNWQEC_WITH_GRIDSYNTH_CPP=1 -DPROJECT_ROOT_DIR=\\\"/Users/mengwang/Desktop/nwqec\\\" -I/Users/mengwang/Desktop/nwqec/include -isystem /Users/mengwang/Desktop/nwqec/build-python/prebuilt_deps/gmp-mpfr-macos-arm64/include -O3 -DNDEBUG -std=c++17 -flto=thin -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk -Wall -Wextra -pedantic -O3 -o CMakeFiles/gridsynth.dir/tools/gridsynth.cpp.o -c /Users/mengwang/Desktop/nwqec/tools/gridsynth.cpp",
+  "file": "/Users/mengwang/Desktop/nwqec/tools/gridsynth.cpp",
+  "output": "CMakeFiles/gridsynth.dir/tools/gridsynth.cpp.o"
+}
+]

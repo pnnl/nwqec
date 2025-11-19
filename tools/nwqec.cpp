@@ -1,5 +1,5 @@
 #include "nwqec/parser/qasm_parser.hpp"
-#include "nwqec/core/pass_manager.hpp"
+#include "nwqec/core/transpiler.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -421,8 +421,37 @@ int main(int argc, char *argv[])
     auto start_transpile = std::chrono::high_resolution_clock::now();
     try
     {
-        NWQEC::PassManager pass_manager;
-        circuit = pass_manager.apply_passes(std::move(circuit), to_pbc, to_clifford_reduction, to_red_pbc, t_pauli_opt, remove_pauli, keep_ccx);
+        NWQEC::Transpiler transpiler;
+        NWQEC::PassConfig config;
+        config.keep_ccx = keep_ccx;
+        config.keep_cx = false; // Not exposed in CLI currently
+        config.silent = false;  // CLI always shows output
+        
+        // Choose the appropriate pass sequence
+        std::vector<NWQEC::PassType> passes;
+        
+        if (t_pauli_opt) {
+            // T-optimization only (requires PBC circuit)
+            passes = {NWQEC::PassType::TFUSE};
+        } else if (to_pbc) {
+            passes = NWQEC::PassSequences::TO_PBC_BASIC;
+        } else if (to_clifford_reduction) {
+            passes = NWQEC::PassSequences::CLIFFORD_REDUCTION;
+        } else if (to_red_pbc) {
+            // Restricted PBC - similar to PBC but keeps CCX gates
+            passes = NWQEC::PassSequences::TO_PBC_BASIC;
+            config.keep_ccx = true; // Force CCX preservation
+        } else {
+            // Default: Clifford+T conversion
+            passes = NWQEC::PassSequences::TO_CLIFFORD_T;
+        }
+        
+        // Add cleanup if requested
+        if (remove_pauli) {
+            passes.push_back(NWQEC::PassType::REMOVE_PAULI);
+        }
+        
+        circuit = transpiler.execute_passes(std::move(circuit), passes, config);
     }
     catch (const std::exception &e)
     {
