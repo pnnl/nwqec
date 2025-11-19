@@ -74,11 +74,21 @@ jobs:
         run: |
           python -m pip install pygridsynth
 
-      - name: Configure CMake
+      - name: Configure CMake (Unix)
+        if: runner.os != 'Windows'
         run: |
           cmake -S . -B build-cli \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DNWQEC_BUILD_PYTHON=OFF
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          cmake -S . -B build-cli `
+            -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=Release `
             -DNWQEC_BUILD_PYTHON=OFF
 
       - name: Build CLI
