@@ -7,10 +7,13 @@
 #include "nwqec/passes/pbc_pass.hpp"
 #include "nwqec/passes/decompose_pass.hpp"
 #include "nwqec/passes/remove_trivial_rz_pass.hpp"
-#include "nwqec/passes/synthesize_rz_pass.hpp"
 #include "nwqec/passes/gate_fusion_pass.hpp"
 #include "nwqec/passes/tfuse_pass.hpp"
 #include "nwqec/passes/remove_pauli_pass.hpp"
+
+#ifdef NWQEC_WITH_GRIDSYNTH_CPP
+#include "nwqec/passes/synthesize_rz_pass.hpp"
+#endif
 
 #include <string>
 #include <vector>
@@ -139,11 +142,16 @@ inline std::unique_ptr<Pass> Transpiler::create_pass(PassType type, const PassCo
             return std::make_unique<CRPass>();
         
         case PassType::SYNTHESIZE_RZ: {
+#ifdef NWQEC_WITH_GRIDSYNTH_CPP
             if (config.epsilon_override >= 0.0) {
                 return std::make_unique<SynthesizeRzPass>(config.epsilon_override);
             } else {
                 return std::make_unique<SynthesizeRzPass>();
             }
+#else
+            // Gridsynth not available - this should not be called
+            return nullptr;
+#endif
         }
         
         case PassType::TFUSE:

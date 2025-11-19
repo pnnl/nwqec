@@ -98,7 +98,7 @@ jobs:
       - name: Smoke test CLI (Unix)
         if: runner.os != 'Windows'
         run: |
-          ./build-cli/transpiler tests/python/fixtures/fixture_circuit.qasm -o build-cli/fixture_circuit_ct.qasm
+          ./build-cli/nwqec-cli tests/python/fixtures/fixture_circuit.qasm -o build-cli/fixture_circuit_ct.qasm
           test -f build-cli/fixture_circuit_ct.qasm
           ./build-cli/gridsynth pi/8 12
 
