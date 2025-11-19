@@ -106,9 +106,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          & "${{ github.workspace }}\build-cli\transpiler.exe" tests\python\fixtures\fixture_circuit.qasm -o build-cli\fixture_circuit_ct.qasm
-          if (-Not (Test-Path build-cli\fixture_circuit_ct.qasm)) { throw "Expected output file missing" }
-          # Note: No gridsynth test on Windows - it's not built without GMP/MPFR
+          # No CLI tools built on Windows - only Python bindings with pygridsynth fallback
+          Write-Host "✓ Windows build completed - CLI tools intentionally not built (use Python API instead)"
 
 
 
