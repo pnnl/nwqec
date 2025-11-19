@@ -381,6 +381,14 @@ if(NWQEC_BUILD_PYTHON)
 
         target_link_libraries(nwqec_ext PRIVATE nwqec_gridsynth)
         target_compile_definitions(nwqec_ext PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+        
+        # Explicitly set gridsynth availability (redundant but ensures it's set)
+        if(NWQEC_WITH_GRIDSYNTH)
+            target_compile_definitions(nwqec_ext PRIVATE NWQEC_WITH_GRIDSYNTH_CPP=1)
+        else()
+            target_compile_definitions(nwqec_ext PRIVATE NWQEC_WITH_GRIDSYNTH_CPP=0)
+        endif()
+        
         target_compile_options(nwqec_ext PRIVATE ${COMMON_COMPILE_OPTIONS})
         # Install extension into the correct Python platlib dir when building a wheel
         if(DEFINED SKBUILD_PLATLIB_DIR)
