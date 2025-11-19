@@ -13,16 +13,12 @@ NWQEC is a C++/Python toolkit for fault-tolerant quantum circuit transpilation. 
 - Python 3.8+
 - C++17 toolchain and CMake ≥ 3.16
 - Python build dependencies: `scikit-build-core`, `pybind11`
-- Recommended: GMP and MPFR for the C++ gridsynth backend
-- Bundled alternatives: prebuilt GMP/MPFR archives are automatically downloaded on Linux (x86_64, arm64), macOS (x86_64, arm64), and Windows (x86_64) when system packages are unavailable
 
-## Installing GMP/MPFR
-- macOS (Homebrew): `brew install gmp mpfr`
-- Ubuntu/Debian: `sudo apt-get install -y libgmp-dev libmpfr-dev`
-- Fedora: `sudo dnf install gmp-devel mpfr-devel`
-- Windows (MSYS2): `pacman -S mingw-w64-x86_64-gmp mingw-w64-x86_64-mpfr`
+## Platform Support
+- **macOS/Linux**: Full C++ gridsynth backend with automatically downloaded prebuilt GMP/MPFR binaries
+- **Windows**: Transpiler only; for gridsynth functionality install `pygridsynth` with `pip install pygridsynth`
 
-Note: With GMP and MPFR, the native C++ gridsynth backend can significantly accelerate Clifford+T synthesis (20× speed-up on an 18-qubit QFT benchmark).
+Note: The C++ gridsynth backend provides significant acceleration for Clifford+T synthesis (20× speed-up on an 18-qubit QFT benchmark compared to pure Python implementations).
 
 ## Installing NWQEC
 ```bash
@@ -30,7 +26,10 @@ pip install -U pip
 pip install scikit-build-core pybind11
 pip install .
 ```
-If GMP/MPFR are not available, CMake automatically downloads the matching prebuilt bundle from the NWQEC release assets and links against it. To force the bundled path (for reproducible builds) set `-DNWQEC_FORCE_BUNDLED_GMP_MPFR=ON`. Custom archives can be supplied via `-DNWQEC_GMP_MPFR_BUNDLE_URL_OVERRIDE=<url>` and the optional `..._HASH_OVERRIDE=<sha256>`.
+
+**Platform-specific notes:**
+- **macOS/Linux**: GMP/MPFR binaries automatically downloaded during build
+- **Windows**: Install pygridsynth for RZ synthesis: `pip install pygridsynth`
 
 
 ## Quick Start (Python)

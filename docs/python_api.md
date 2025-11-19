@@ -25,8 +25,9 @@ Keyword-only options must be supplied by name (see bullet lists). Each function 
   - `epsilon`: absolute error tolerance for RZ synthesis; defaults to `abs(theta) * DEFAULT_EPSILON_MULTIPLIER` per angle.
   - Produces a Clifford+T-only circuit.
 
-- **`to_pbc(circuit: Circuit, epsilon: float | None = None) -> Circuit`**
+- **`to_pbc(circuit: Circuit, keep_cx: bool = False, epsilon: float | None = None) -> Circuit`**
   - `circuit`: source circuit.
+  - `keep_cx`: preserve CX gates where possible in the PBC form.
   - `epsilon`: absolute error tolerance for RZ synthesis.
   - Transpiles the circuit to a Pauli-Based Circuit (PBC).
 
@@ -46,13 +47,13 @@ Create with `Circuit(num_qubits: int)`.
 
 ### Inspection
 - `num_qubits() -> int`
-- `num_bits() -> int`
 - `count_ops() -> dict[str, int]`
 - `depth() -> int`
 - `stats() -> str`
 - `duration(code_distance: float) -> float`
 - `to_qasm_str() -> str`
-- `to_qasm_file(path: str) -> None`
+- `save_qasm(path: str) -> None`
+- `to_qasm_file(filename: str) -> None`  # alias for save_qasm
 - `is_clifford_t() -> bool`
 
 ### Single-Qubit Gates
@@ -107,10 +108,10 @@ print(c.stats())
 ct = nwqec.to_clifford_t(c, epsilon=1e-10)
 print(ct.count_ops())
 
-# PBC + Tfuse
-pbc = nwqec.to_pbc(c)
+# PBC + Tfuse  
+pbc = nwqec.to_pbc(c, keep_cx=False)
 pbc_opt = nwqec.fuse_t(pbc)
-print("T count after Tfuse:", pbc_opt.count_ops().get("T", 0))
+print("T count after Tfuse:", pbc_opt.count_ops().get("t_pauli", 0))
 pbc_opt.save_qasm("example_circuits/qft_n18_transpiled.qasm")
 
 # TACO pipeline

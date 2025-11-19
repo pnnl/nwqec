@@ -255,20 +255,22 @@ endif()
 # Executables
 # =============================================================================
 
-add_executable(transpiler tools/transpiler.cpp)
-set(_NWQEC_CLI_TARGETS transpiler)
-target_link_libraries(transpiler PRIVATE nwqec_gridsynth)
-target_compile_definitions(transpiler PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_options(transpiler PRIVATE ${COMMON_COMPILE_OPTIONS})
-
 if(NWQEC_WITH_GRIDSYNTH)
+    add_executable(transpiler tools/transpiler.cpp)
+    set(_NWQEC_CLI_TARGETS transpiler)
+    target_link_libraries(transpiler PRIVATE nwqec_gridsynth)
+    target_compile_definitions(transpiler PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_options(transpiler PRIVATE ${COMMON_COMPILE_OPTIONS})
+
     add_executable(gridsynth tools/gridsynth.cpp)
     target_link_libraries(gridsynth PRIVATE nwqec_gridsynth)
     target_compile_definitions(gridsynth PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_options(gridsynth PRIVATE ${COMMON_COMPILE_OPTIONS})
     list(APPEND _NWQEC_CLI_TARGETS gridsynth)
 else()
-    message(STATUS "Skipping gridsynth CLI (GMP/MPFR not available)")
+    message(STATUS "Skipping CLI tools (GMP/MPFR not available on this platform)")
+    message(STATUS "  → Use Python bindings instead: import nwqec")
+    set(_NWQEC_CLI_TARGETS)
 endif()
 
 # =============================================================================
