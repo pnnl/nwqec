@@ -11,6 +11,7 @@
 
 # Ignore build directories
 /build/
+build-*/
 /debug/
 /release/
 

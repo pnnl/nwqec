@@ -6,8 +6,8 @@ The `nwqec` package exposes the core transpilation functionality to Python users
 Module Constants
 ----------------
 - `WITH_GRIDSYNTH_CPP: bool`
-  - `True` if the package was built with the C++ gridsynth backend (GMP/MPFR detected at build time).
-  - `False` only if the build was explicitly configured without GMP/MPFR support; in that case RZ synthesis is handled in pure Python.
+  - `True` if the package was built with the C++ gridsynth backend using prebuilt GMP/MPFR libraries.
+  - Always `True` on supported platforms (macOS/Linux) as prebuilt binaries are automatically downloaded.
 - `__version__: str`
   - Package version string.
 

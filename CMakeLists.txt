@@ -18,7 +18,7 @@ message(STATUS "Using C++ compiler: ${CMAKE_CXX_COMPILER}")
 # Options
 option(NWQEC_ENABLE_LTO "Enable IPO/LTO in Release" ON)
 option(NWQEC_ENABLE_NATIVE "Enable -march=native in Release (GCC/Clang)" OFF)
-option(NWQEC_BUILD_PYTHON "Build Python bindings (pybind11)" ON)
+option(NWQEC_BUILD_PYTHON "Build Python bindings (pybind11)" OFF)
 
 # Directory for downloading prebuilt GMP/MPFR binaries
 set(NWQEC_PREBUILT_DIR "${CMAKE_BINARY_DIR}/prebuilt_deps" CACHE PATH "Download cache for prebuilt dependencies")
@@ -195,83 +195,65 @@ endif()
 # Gridsynth dependency (GMP/MPFR) and target
 # =============================================================================
 
-if(WIN32)
-    # Windows: Skip GMP/MPFR due to complexity, use pygridsynth fallback
-    message(STATUS "Windows detected: skipping C++ gridsynth (use pygridsynth fallback)")
-    set(NWQEC_WITH_GRIDSYNTH OFF)
-else()
-    # macOS/Linux: Always use prebuilt GMP/MPFR binaries
-    message(STATUS "Setting up prebuilt GMP/MPFR for ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
-    nwqec_setup_prebuilt_deps(_PREBUILT_ROOT)
+# Always use prebuilt GMP/MPFR binaries on supported platforms
+message(STATUS "Setting up prebuilt GMP/MPFR for ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
+nwqec_setup_prebuilt_deps(_PREBUILT_ROOT)
 
-    if(NOT _PREBUILT_ROOT)
-        message(FATAL_ERROR "No prebuilt GMP/MPFR available for ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
-    endif()
-
-    set(_INCLUDE_DIR "${_PREBUILT_ROOT}/include")
-    set(_LIB_DIR "${_PREBUILT_ROOT}/lib")
-    
-    if(NOT EXISTS "${_INCLUDE_DIR}" OR NOT EXISTS "${_LIB_DIR}")
-        message(FATAL_ERROR "Prebuilt archive missing include/lib directories at ${_PREBUILT_ROOT}")
-    endif()
-
-    # Find the library files
-    nwqec_pick_library_from_bundle(_GMP_LIB "${_LIB_DIR}" gmp)
-    nwqec_pick_library_from_bundle(_MPFR_LIB "${_LIB_DIR}" mpfr)
-
-    if(NOT _GMP_LIB OR NOT _MPFR_LIB)
-        message(FATAL_ERROR "Required libraries not found in ${_LIB_DIR}")
-    endif()
-
-    # Create imported targets
-    add_library(GMP::gmp UNKNOWN IMPORTED)
-    set_target_properties(GMP::gmp PROPERTIES
-        IMPORTED_LOCATION "${_GMP_LIB}"
-        INTERFACE_INCLUDE_DIRECTORIES "${_INCLUDE_DIR}"
-    )
-
-    add_library(MPFR::MPFR UNKNOWN IMPORTED)
-    set_target_properties(MPFR::MPFR PROPERTIES
-        IMPORTED_LOCATION "${_MPFR_LIB}"
-        INTERFACE_INCLUDE_DIRECTORIES "${_INCLUDE_DIR}"
-    )
-
-    set(NWQEC_WITH_GRIDSYNTH ON)
-    message(STATUS "Using prebuilt GMP/MPFR from ${_PREBUILT_ROOT}")
+if(NOT _PREBUILT_ROOT)
+    message(FATAL_ERROR "No prebuilt GMP/MPFR available for ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
-# Interface target for gridsynth that carries MP deps (only if available)
-if(NWQEC_WITH_GRIDSYNTH)
-    add_library(nwqec_gridsynth INTERFACE)
-    target_link_libraries(nwqec_gridsynth INTERFACE nwqec GMP::gmp MPFR::MPFR)
-    target_compile_definitions(nwqec_gridsynth INTERFACE NWQEC_WITH_GRIDSYNTH_CPP=1)
-else()
-    add_library(nwqec_gridsynth INTERFACE)
-    target_link_libraries(nwqec_gridsynth INTERFACE nwqec)
-    target_compile_definitions(nwqec_gridsynth INTERFACE NWQEC_WITH_GRIDSYNTH_CPP=0)
+set(_INCLUDE_DIR "${_PREBUILT_ROOT}/include")
+set(_LIB_DIR "${_PREBUILT_ROOT}/lib")
+
+if(NOT EXISTS "${_INCLUDE_DIR}" OR NOT EXISTS "${_LIB_DIR}")
+    message(FATAL_ERROR "Prebuilt archive missing include/lib directories at ${_PREBUILT_ROOT}")
 endif()
+
+# Find the library files
+nwqec_pick_library_from_bundle(_GMP_LIB "${_LIB_DIR}" gmp)
+nwqec_pick_library_from_bundle(_MPFR_LIB "${_LIB_DIR}" mpfr)
+
+if(NOT _GMP_LIB OR NOT _MPFR_LIB)
+    message(FATAL_ERROR "Required libraries not found in ${_LIB_DIR}")
+endif()
+
+# Create imported targets
+add_library(GMP::gmp UNKNOWN IMPORTED)
+set_target_properties(GMP::gmp PROPERTIES
+    IMPORTED_LOCATION "${_GMP_LIB}"
+    INTERFACE_INCLUDE_DIRECTORIES "${_INCLUDE_DIR}"
+)
+
+add_library(MPFR::MPFR UNKNOWN IMPORTED)
+set_target_properties(MPFR::MPFR PROPERTIES
+    IMPORTED_LOCATION "${_MPFR_LIB}"
+    INTERFACE_INCLUDE_DIRECTORIES "${_INCLUDE_DIR}"
+)
+
+set(NWQEC_WITH_GRIDSYNTH ON)
+message(STATUS "Using prebuilt GMP/MPFR from ${_PREBUILT_ROOT}")
+
+# Interface target for gridsynth that carries MP deps
+add_library(nwqec_gridsynth INTERFACE)
+target_link_libraries(nwqec_gridsynth INTERFACE nwqec GMP::gmp MPFR::MPFR)
+target_compile_definitions(nwqec_gridsynth INTERFACE NWQEC_WITH_GRIDSYNTH_CPP=1)
 
 # =============================================================================
 # Executables
 # =============================================================================
 
-if(NWQEC_WITH_GRIDSYNTH)
-    add_executable(nwqec-cli tools/nwqec.cpp)
-    set(_NWQEC_CLI_TARGETS nwqec-cli)
-    target_link_libraries(nwqec-cli PRIVATE nwqec_gridsynth)
-    target_compile_definitions(nwqec-cli PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_options(nwqec-cli PRIVATE ${COMMON_COMPILE_OPTIONS})
+add_executable(nwqec-cli tools/nwqec.cpp)
+set(_NWQEC_CLI_TARGETS nwqec-cli)
+target_link_libraries(nwqec-cli PRIVATE nwqec_gridsynth)
+target_compile_definitions(nwqec-cli PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_options(nwqec-cli PRIVATE ${COMMON_COMPILE_OPTIONS})
 
-    add_executable(gridsynth tools/gridsynth.cpp)
-    target_link_libraries(gridsynth PRIVATE nwqec_gridsynth)
-    target_compile_definitions(gridsynth PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_options(gridsynth PRIVATE ${COMMON_COMPILE_OPTIONS})
-    list(APPEND _NWQEC_CLI_TARGETS gridsynth)
-else()
-    message(STATUS "Skipping CLI tools (GMP/MPFR not available on this platform)")
-    message(STATUS "  → Use Python bindings instead: import nwqec")
-    set(_NWQEC_CLI_TARGETS)
-endif()
+add_executable(gridsynth tools/gridsynth.cpp)
+target_link_libraries(gridsynth PRIVATE nwqec_gridsynth)
+target_compile_definitions(gridsynth PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_options(gridsynth PRIVATE ${COMMON_COMPILE_OPTIONS})
+list(APPEND _NWQEC_CLI_TARGETS gridsynth)
 
 # =============================================================================
 # Build type specific tweaks
@@ -304,23 +286,15 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 # Status messages
-if(NWQEC_WITH_GRIDSYNTH)
-    message(STATUS "Configured executable: nwqec-cli (with GMP/MPFR gridsynth backend)")
-    message(STATUS "Configured executable: gridsynth (with GMP/MPFR)")
-else()
-    message(STATUS "Skipped CLI tools (C++ gridsynth unavailable)")
-    message(STATUS "  → Use Python bindings instead: import nwqec")
-    message(STATUS "  → For RZ synthesis, install pygridsynth: pip install pygridsynth")
-endif()
+message(STATUS "Configured executable: nwqec-cli (with GMP/MPFR gridsynth backend)")
+message(STATUS "Configured executable: gridsynth (with GMP/MPFR)")
 
 # =============================================================================
 # Install rules (CLI binaries and headers)
 # =============================================================================
 include(GNUInstallDirs)
-if(NWQEC_WITH_GRIDSYNTH)
-    install(TARGETS nwqec-cli gridsynth
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-endif()
+install(TARGETS nwqec-cli gridsynth
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Install interface libraries and export targets
 install(TARGETS nwqec nwqec_gridsynth
@@ -359,7 +333,7 @@ install(FILES
 # Tests (CLI)
 # =============================================================================
 include(CTest)
-if(BUILD_TESTING AND NWQEC_WITH_GRIDSYNTH)
+if(BUILD_TESTING)
     add_test(NAME nwqec_help
              COMMAND $<TARGET_FILE:nwqec-cli> --help)
     add_test(NAME nwqec_qft
@@ -381,14 +355,6 @@ if(NWQEC_BUILD_PYTHON)
 
         target_link_libraries(nwqec_ext PRIVATE nwqec_gridsynth)
         target_compile_definitions(nwqec_ext PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-        
-        # Explicitly set gridsynth availability (redundant but ensures it's set)
-        if(NWQEC_WITH_GRIDSYNTH)
-            target_compile_definitions(nwqec_ext PRIVATE NWQEC_WITH_GRIDSYNTH_CPP=1)
-        else()
-            target_compile_definitions(nwqec_ext PRIVATE NWQEC_WITH_GRIDSYNTH_CPP=0)
-        endif()
-        
         target_compile_options(nwqec_ext PRIVATE ${COMMON_COMPILE_OPTIONS})
         # Install extension into the correct Python platlib dir when building a wheel
         if(DEFINED SKBUILD_PLATLIB_DIR)

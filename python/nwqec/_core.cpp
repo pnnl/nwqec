@@ -74,7 +74,7 @@ namespace
         return false;
     }
 
-    // Helper to run transforms using the new PassManager
+    // Helper to run transforms using the Transpiler
     std::unique_ptr<NWQEC::Circuit> apply_transforms(const NWQEC::Circuit &circuit,
                                                      bool to_pbc,
                                                      bool to_clifford_reduction,
@@ -105,14 +105,8 @@ namespace
         } else if (to_clifford_reduction) {
             passes = NWQEC::PassSequences::CLIFFORD_REDUCTION;
         } else {
-            // Default: Clifford+T
-#ifdef NWQEC_WITH_GRIDSYNTH_CPP
+            // Default: Clifford+T (always available)
             passes = NWQEC::PassSequences::TO_CLIFFORD_T;
-#else
-            // Gridsynth not available: use TO_CLIFFORD_T_RZ (stops before synthesis)
-            // Python will handle RZ synthesis with pygridsynth
-            passes = NWQEC::PassSequences::TO_CLIFFORD_T_RZ;
-#endif
         }
         
         // Add cleanup passes if requested

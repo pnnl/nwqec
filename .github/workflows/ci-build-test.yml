@@ -29,9 +29,6 @@ jobs:
           - name: macOS arm64
             os: macos-14
             python-version: '3.11'
-          - name: Windows x86_64 (pygridsynth)
-            os: windows-latest
-            python-version: '3.11'
 
     steps:
       - name: Checkout
@@ -49,11 +46,6 @@ jobs:
           brew update
           brew install ninja
 
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          choco install ninja --no-progress --yes
 
 
       - name: Set up Python
@@ -69,45 +61,23 @@ jobs:
         run: |
           python -m pip install scikit-build-core pybind11 pytest
 
-      - name: Install pygridsynth (Windows only)
-        if: runner.os == 'Windows'
-        run: |
-          python -m pip install pygridsynth
 
-      - name: Configure CMake (Unix)
-        if: runner.os != 'Windows'
+      - name: Configure CMake
         run: |
           cmake -S . -B build-cli \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DNWQEC_BUILD_PYTHON=OFF
 
-      - name: Configure CMake (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          cmake -S . -B build-cli `
-            -G "Ninja" `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DNWQEC_BUILD_PYTHON=OFF
-
       - name: Build CLI
         run: |
           cmake --build build-cli --parallel
 
-      - name: Smoke test CLI (Unix)
-        if: runner.os != 'Windows'
+      - name: Smoke test CLI
         run: |
           ./build-cli/nwqec-cli tests/python/fixtures/fixture_circuit.qasm -o build-cli/fixture_circuit_ct.qasm
           test -f build-cli/fixture_circuit_ct.qasm
           ./build-cli/gridsynth pi/8 12
-
-      - name: Smoke test CLI (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          # No CLI tools built on Windows - only Python bindings with pygridsynth fallback
-          Write-Host "Windows build completed - CLI tools intentionally not built (use Python API instead)"
 
 
 
@@ -119,21 +89,6 @@ jobs:
       - name: Verify Python package import
         run: |
           python -c "import nwqec; print('nwqec version:', nwqec.__version__); print('WITH_GRIDSYNTH_CPP:', nwqec.WITH_GRIDSYNTH_CPP)"
-
-      - name: Test pygridsynth fallback (Windows only)
-        if: runner.os == 'Windows'
-        run: |
-          python -c "
-          import warnings
-          warnings.filterwarnings('ignore')  # Suppress our own warning
-          import nwqec
-          print('Testing Windows pygridsynth fallback...')
-          print('C++ gridsynth available:', nwqec.WITH_GRIDSYNTH_CPP)
-          if not nwqec.WITH_GRIDSYNTH_CPP:
-              print('✓ Windows correctly disabled C++ gridsynth')
-          else:
-              raise RuntimeError('Expected C++ gridsynth to be disabled on Windows')
-          "
 
       - name: Run Python tests
         run: |

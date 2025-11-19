@@ -15,21 +15,26 @@ NWQEC is a C++/Python toolkit for fault-tolerant quantum circuit transpilation. 
 - Python build dependencies: `scikit-build-core`, `pybind11`
 
 ## Platform Support
-- **macOS/Linux**: Full C++ gridsynth backend with automatically downloaded prebuilt GMP/MPFR binaries
-- **Windows**: Transpiler only; for gridsynth functionality install `pygridsynth` with `pip install pygridsynth`
+NWQEC is supported on macOS and Linux with full C++ gridsynth backend functionality. The build system automatically downloads prebuilt GMP/MPFR binaries for these platforms.
 
-Note: The C++ gridsynth backend provides significant acceleration for Clifford+T synthesis (20× speed-up on an 18-qubit QFT benchmark compared to pure Python implementations).
+The C++ gridsynth backend provides significant acceleration for Clifford+T synthesis (20× speed-up on an 18-qubit QFT benchmark).
 
 ## Installing NWQEC
+
+### Python Package (Recommended)
 ```bash
 pip install -U pip
 pip install scikit-build-core pybind11
 pip install .
 ```
 
-**Platform-specific notes:**
-- **macOS/Linux**: GMP/MPFR binaries automatically downloaded during build
-- **Windows**: Install pygridsynth for RZ synthesis: `pip install pygridsynth`
+### C++ Development
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+Prebuilt GMP/MPFR binaries are automatically downloaded during the build process.
 
 
 ## Quick Start (Python)
@@ -62,7 +67,7 @@ print(f"Depth reduction of TACO over PBC: {pbc.depth() / taco.depth():.2f}x")
 ## Repository Layout
 - `include/nwqec/` — public headers (core, parser, passes, gridsynth, tableau)
 - `python/nwqec/` — Python package and pybind11 bindings
-- `tools/` — C++ command-line utilities (`transpiler`, `gridsynth`)
+- `tools/` — C++ command-line utilities (`nwqec-cli`, `gridsynth`)
 - `docs/` — additional documentation
 - `tests/` — Python tests
 

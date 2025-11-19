@@ -3,19 +3,17 @@ C++ CLI Guide
 
 Overview
 --------
-The repository ships two C++ command-line tools:
-- `transpiler`: parse OpenQASM, transpile to Clifford+T or PBC, optionally optimize T rotations, and export QASM/statistics.
-- `gridsynth`: synthesize a single RZ angle into a Clifford+T sequence (requires GMP/MPFR).
+The repository provides two C++ command-line tools:
+- `nwqec-cli`: parse OpenQASM, transpile to Clifford+T or PBC, optionally optimize T rotations, and export QASM/statistics.
+- `gridsynth`: synthesize a single RZ angle into a Clifford+T sequence.
 
 **Platform Support:**
-- **macOS/Linux**: Both tools available with automatic prebuilt GMP/MPFR download
-- **Windows**: Only `transpiler` available; users should install `pygridsynth` for RZ synthesis
+NWQEC is supported on macOS and Linux. Both tools are available with automatic prebuilt GMP/MPFR download.
 
 Build Requirements
 ------------------
 - CMake ≥ 3.16 and a C++17 compiler
-- **macOS/Linux**: GMP/MPFR automatically downloaded from prebuilt binaries
-- **Windows**: No additional dependencies (C++ gridsynth disabled, use pygridsynth instead)
+- GMP/MPFR automatically downloaded from prebuilt binaries
 
 Building
 --------
@@ -27,40 +25,40 @@ cmake --build build -j
 Optional CMake flags:
 - `-DNWQEC_ENABLE_LTO=ON|OFF` (default ON) - Enable link-time optimization
 - `-DNWQEC_ENABLE_NATIVE=ON|OFF` (default OFF) - Enable -march=native optimization
-- `-DNWQEC_BUILD_PYTHON=ON|OFF` (default ON) - Build Python bindings
+- `-DNWQEC_BUILD_PYTHON=ON|OFF` (default OFF) - Build Python bindings
 
-Transpiler Usage
-----------------
-Basic syntax: `transpiler [OPTIONS] <INPUT>`
+CLI Usage
+---------
+Basic syntax: `nwqec-cli [OPTIONS] <INPUT>`
 
-Get help: `transpiler --help` or `transpiler -h`
+Get help: `nwqec-cli --help` or `nwqec-cli -h`
 
 ### Input Sources
 ```bash
 # Parse QASM file
-transpiler circuit.qasm
+nwqec-cli circuit.qasm
 
 # Generate test circuits
-transpiler --qft 4        # QFT circuit with 4 qubits  
-transpiler --shor 3       # Shor test circuit for 3-bit numbers
+nwqec-cli --qft 4        # QFT circuit with 4 qubits  
+nwqec-cli --shor 3       # Shor test circuit for 3-bit numbers
 ```
 
-### Transpilation Passes
+##### Transpilation Passes
 ```bash
 # Default: Clifford+T conversion
-transpiler circuit.qasm
+nwqec-cli circuit.qasm
 
 # Pauli-Based Circuit (PBC) 
-transpiler circuit.qasm --pbc
+nwqec-cli circuit.qasm --pbc
 
 # Clifford Reduction (TACO)
-transpiler circuit.qasm --cr  
+nwqec-cli circuit.qasm --cr  
 
 # Restricted PBC (preserves CCX gates)
-transpiler circuit.qasm --red-pbc
+nwqec-cli circuit.qasm --red-pbc
 
 # PBC with T-count optimization
-transpiler circuit.qasm --pbc --t-opt
+nwqec-cli circuit.qasm --pbc --t-opt
 ```
 
 **Note**: PBC (`--pbc`), Clifford Reduction (`--cr`), and Restricted PBC (`--red-pbc`) are mutually exclusive.
@@ -68,41 +66,41 @@ transpiler circuit.qasm --pbc --t-opt
 ### Output Options
 ```bash
 # Default: saves to <input>_transpiled.qasm
-transpiler circuit.qasm
+nwqec-cli circuit.qasm
 
 # Custom output filename
-transpiler circuit.qasm -o my_output.qasm
-transpiler circuit.qasm --output my_output.qasm
+nwqec-cli circuit.qasm -o my_output.qasm
+nwqec-cli circuit.qasm --output my_output.qasm
 
 # Don't save file (display stats only)
-transpiler circuit.qasm --no-save
+nwqec-cli circuit.qasm --no-save
 ```
 
 ### Analysis Options
 ```bash
 # Remove Pauli gates from output
-transpiler circuit.qasm --remove-pauli
+nwqec-cli circuit.qasm --remove-pauli
 
 # Preserve CCX gates during decomposition
-transpiler circuit.qasm --keep-ccx
+nwqec-cli circuit.qasm --keep-ccx
 ```
 
 ### Complete Examples
 ```bash
 # Basic transpilation
-transpiler qft_n4.qasm
+nwqec-cli qft_n4.qasm
 
 # PBC with T optimization, custom output
-transpiler circuit.qasm --pbc --t-opt -o optimized.qasm
+nwqec-cli circuit.qasm --pbc --t-opt -o optimized.qasm
 
 # Generate QFT, apply Clifford reduction, don't save
-transpiler --qft 8 --cr --no-save
+nwqec-cli --qft 8 --cr --no-save
 
 # Shor circuit with restricted PBC
-transpiler --shor 4 --red-pbc
+nwqec-cli --shor 4 --red-pbc
 
 # Advanced: PBC with all options
-transpiler large_circuit.qasm --pbc --t-opt --remove-pauli --keep-ccx
+nwqec-cli large_circuit.qasm --pbc --t-opt --remove-pauli --keep-ccx
 ```
 
 Gridsynth Usage
@@ -122,10 +120,6 @@ gridsynth pi/4 10
 gridsynth 0.785398 15  # approximately π/4
 ```
 
-**Windows Users**: Install pygridsynth instead:
-```bash
-pip install pygridsynth
-```
 
 Performance Notes
 -----------------
