@@ -303,11 +303,13 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     endif()
 endif()
 
-message(STATUS "Configured executable: transpiler")
+# Status messages
 if(NWQEC_WITH_GRIDSYNTH)
+    message(STATUS "Configured executable: transpiler (with GMP/MPFR gridsynth backend)")
     message(STATUS "Configured executable: gridsynth (with GMP/MPFR)")
 else()
-    message(STATUS "Skipped gridsynth executable (GMP/MPFR not available)")
+    message(STATUS "Skipped CLI tools (GMP/MPFR not available on this platform)")
+    message(STATUS "  → Use Python bindings instead: import nwqec")
     if(WIN32)
         message(STATUS "  → Windows users can use pygridsynth instead: pip install pygridsynth")
     endif()
@@ -319,9 +321,6 @@ endif()
 include(GNUInstallDirs)
 if(NWQEC_WITH_GRIDSYNTH)
     install(TARGETS transpiler gridsynth
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-else()
-    install(TARGETS transpiler
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
