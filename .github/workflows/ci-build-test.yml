@@ -107,7 +107,7 @@ jobs:
         shell: powershell
         run: |
           # No CLI tools built on Windows - only Python bindings with pygridsynth fallback
-          Write-Host "✓ Windows build completed - CLI tools intentionally not built (use Python API instead)"
+          Write-Host "Windows build completed - CLI tools intentionally not built (use Python API instead)"
 
 
 
