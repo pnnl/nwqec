@@ -29,7 +29,7 @@ jobs:
           - name: macOS arm64
             os: macos-14
             python-version: '3.11'
-          - name: Windows x86_64
+          - name: Windows x86_64 (pygridsynth)
             os: windows-latest
             python-version: '3.11'
 
@@ -55,6 +55,7 @@ jobs:
         run: |
           choco install ninja --no-progress --yes
 
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -68,17 +69,19 @@ jobs:
         run: |
           python -m pip install scikit-build-core pybind11 pytest
 
-      - name: Configure CMake (Unix)
-        if: runner.os != 'Windows'
+      - name: Install pygridsynth (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install pygridsynth
+
+      - name: Configure CMake
         run: |
           cmake -S . -B build-cli \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DNWQEC_FORCE_BUNDLED_GMP_MPFR=ON \
             -DNWQEC_BUILD_PYTHON=OFF
 
-      - name: Build CLI (Unix)
-        if: runner.os != 'Windows'
+      - name: Build CLI
         run: |
           cmake --build build-cli --parallel
 
@@ -89,37 +92,39 @@ jobs:
           test -f build-cli/fixture_circuit_ct.qasm
           ./build-cli/gridsynth pi/8 12
 
-      - name: Configure CMake (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          cmake -S . -B build-cli `
-            -G "Ninja" `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DNWQEC_FORCE_BUNDLED_GMP_MPFR=ON `
-            -DNWQEC_BUILD_PYTHON=OFF
-
-      - name: Build CLI (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          cmake --build build-cli --parallel
-
       - name: Smoke test CLI (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
           & "${{ github.workspace }}\build-cli\transpiler.exe" tests\python\fixtures\fixture_circuit.qasm -o build-cli\fixture_circuit_ct.qasm
           if (-Not (Test-Path build-cli\fixture_circuit_ct.qasm)) { throw "Expected output file missing" }
-          & "${{ github.workspace }}\build-cli\gridsynth.exe" pi/8 12
+          # Note: No gridsynth test on Windows - it's not built without GMP/MPFR
+
+
+
 
       - name: Pip install project
         run: |
-          python -m pip install . --config-settings cmake.define.NWQEC_FORCE_BUNDLED_GMP_MPFR=ON
+          python -m pip install .
 
       - name: Verify Python package import
         run: |
           python -c "import nwqec; print('nwqec version:', nwqec.__version__); print('WITH_GRIDSYNTH_CPP:', nwqec.WITH_GRIDSYNTH_CPP)"
+
+      - name: Test pygridsynth fallback (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          python -c "
+          import warnings
+          warnings.filterwarnings('ignore')  # Suppress our own warning
+          import nwqec
+          print('Testing Windows pygridsynth fallback...')
+          print('C++ gridsynth available:', nwqec.WITH_GRIDSYNTH_CPP)
+          if not nwqec.WITH_GRIDSYNTH_CPP:
+              print('✓ Windows correctly disabled C++ gridsynth')
+          else:
+              raise RuntimeError('Expected C++ gridsynth to be disabled on Windows')
+          "
 
       - name: Run Python tests
         run: |

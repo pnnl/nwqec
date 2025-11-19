@@ -19,59 +19,37 @@ message(STATUS "Using C++ compiler: ${CMAKE_CXX_COMPILER}")
 option(NWQEC_ENABLE_LTO "Enable IPO/LTO in Release" ON)
 option(NWQEC_ENABLE_NATIVE "Enable -march=native in Release (GCC/Clang)" OFF)
 option(NWQEC_BUILD_PYTHON "Build Python bindings (pybind11)" ON)
-option(NWQEC_FORCE_BUNDLED_GMP_MPFR "Always download and use the bundled GMP/MPFR distribution" OFF)
 
-set(NWQEC_GMP_MPFR_BUNDLE_URL_OVERRIDE "" CACHE STRING "Custom URL for a GMP/MPFR prebuilt bundle (.zip)")
-set(NWQEC_GMP_MPFR_BUNDLE_HASH_OVERRIDE "" CACHE STRING "SHA256 for the overridden GMP/MPFR bundle")
-set(NWQEC_GMP_MPFR_BUNDLE_DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/nwqec_gmp_mpfr" CACHE PATH "Download cache location for GMP/MPFR bundles")
+# Directory for downloading prebuilt GMP/MPFR binaries
+set(NWQEC_PREBUILT_DIR "${CMAKE_BINARY_DIR}/prebuilt_deps" CACHE PATH "Download cache for prebuilt dependencies")
 
-mark_as_advanced(
-    NWQEC_GMP_MPFR_BUNDLE_URL_OVERRIDE
-    NWQEC_GMP_MPFR_BUNDLE_HASH_OVERRIDE
-    NWQEC_GMP_MPFR_BUNDLE_DOWNLOAD_DIR)
-
-function(nwqec_select_gmp_mpfr_bundle out_url out_hash out_label)
-    if(NOT "${NWQEC_GMP_MPFR_BUNDLE_URL_OVERRIDE}" STREQUAL "")
-        set(${out_url} "${NWQEC_GMP_MPFR_BUNDLE_URL_OVERRIDE}" PARENT_SCOPE)
-        set(${out_hash} "${NWQEC_GMP_MPFR_BUNDLE_HASH_OVERRIDE}" PARENT_SCOPE)
-        if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "")
-            set(_override_label "override")
-        else()
-            set(_override_label "override-${CMAKE_HOST_SYSTEM_NAME}")
-        endif()
-        set(${out_label} "${_override_label}" PARENT_SCOPE)
-        return()
-    endif()
-
-    set(_bundle_url "")
-    set(_bundle_hash "")
-    set(_bundle_label "")
+# Get prebuilt binary info for current platform
+function(nwqec_get_prebuilt_info out_url out_hash out_name)
+    set(_url "")
+    set(_hash "")
+    set(_name "")
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$")
-        set(_bundle_url "https://github.com/pnnl/nwqec/releases/download/v0.1.0/gmp-mpfr-linux-x86_64.zip")
-        set(_bundle_hash "b809417ec3ac3720bf8f359a1b7385197e830a2687a92ac60f8c5d013f412633")
-        set(_bundle_label "linux-x86_64")
+        set(_url "https://github.com/pnnl/nwqec/releases/download/v0.1.0/gmp-mpfr-linux-x86_64.zip")
+        set(_hash "b809417ec3ac3720bf8f359a1b7385197e830a2687a92ac60f8c5d013f412633")
+        set(_name "gmp-mpfr-linux-x86_64.zip")
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
-        set(_bundle_url "https://github.com/pnnl/nwqec/releases/download/v0.1.0/gmp-mpfr-linux-arm64.zip")
-        set(_bundle_hash "48b1e9f01659c9072445b6430f2488467d88fc456cddfb7e423787a4168f8bf4")
-        set(_bundle_label "linux-arm64")
+        set(_url "https://github.com/pnnl/nwqec/releases/download/v0.1.0/gmp-mpfr-linux-arm64.zip")
+        set(_hash "48b1e9f01659c9072445b6430f2488467d88fc456cddfb7e423787a4168f8bf4")
+        set(_name "gmp-mpfr-linux-arm64.zip")
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
-        set(_bundle_url "https://github.com/pnnl/nwqec/releases/download/v0.1.0/gmp-mpfr-macos-arm64.zip")
-        set(_bundle_hash "b247e76817ea3b0e7ed98b918c893ff8db301db48fcf52bba9f84412312b1f53")
-        set(_bundle_label "macos-arm64")
+        set(_url "https://github.com/pnnl/nwqec/releases/download/v0.1.0/gmp-mpfr-macos-arm64.zip")
+        set(_hash "b247e76817ea3b0e7ed98b918c893ff8db301db48fcf52bba9f84412312b1f53")
+        set(_name "gmp-mpfr-macos-arm64.zip")
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$")
-        set(_bundle_url "https://github.com/pnnl/nwqec/releases/download/v0.1.0/gmp-mpfr-macos-x86_64.zip")
-        set(_bundle_hash "5fcc8af345ade29dabb48e86a94852c66f3926d6bf82209cdd94e73725dcd1be")
-        set(_bundle_label "macos-x86_64")
-    elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
-        set(_bundle_url "https://github.com/pnnl/nwqec/releases/download/v0.1.0/gmp-mpfr-windows-x86_64.zip")
-        set(_bundle_hash "7f407b22df082dfa942329e09b3bc25cdebfed3577486285352767ab5245586a")
-        set(_bundle_label "windows-x86_64")
+        set(_url "https://github.com/pnnl/nwqec/releases/download/v0.1.0/gmp-mpfr-macos-x86_64.zip")
+        set(_hash "5fcc8af345ade29dabb48e86a94852c66f3926d6bf82209cdd94e73725dcd1be")
+        set(_name "gmp-mpfr-macos-x86_64.zip")
     endif()
 
-    set(${out_url} "${_bundle_url}" PARENT_SCOPE)
-    set(${out_hash} "${_bundle_hash}" PARENT_SCOPE)
-    set(${out_label} "${_bundle_label}" PARENT_SCOPE)
+    set(${out_url} "${_url}" PARENT_SCOPE)
+    set(${out_hash} "${_hash}" PARENT_SCOPE)
+    set(${out_name} "${_name}" PARENT_SCOPE)
 endfunction()
 
 function(nwqec_pick_library_from_bundle out_var lib_dir base_name)
@@ -117,107 +95,73 @@ function(nwqec_pick_library_from_bundle out_var lib_dir base_name)
     set(${out_var} "" PARENT_SCOPE)
 endfunction()
 
-function(nwqec_prepare_bundled_gmp_mpfr out_root)
-    nwqec_select_gmp_mpfr_bundle(_bundle_url _bundle_hash _bundle_label)
-    if(_bundle_url STREQUAL "")
+# Download and setup prebuilt GMP/MPFR binaries
+function(nwqec_setup_prebuilt_deps out_root)
+    nwqec_get_prebuilt_info(_url _hash _filename)
+    if(_url STREQUAL "")
         set(${out_root} "" PARENT_SCOPE)
         return()
     endif()
 
-    file(MAKE_DIRECTORY "${NWQEC_GMP_MPFR_BUNDLE_DOWNLOAD_DIR}")
-
-    get_filename_component(_zip_filename "${_bundle_url}" NAME)
-    if(_zip_filename STREQUAL "")
-        set(_zip_filename "gmp-mpfr-bundle.zip")
-    endif()
-    set(_zip_path "${NWQEC_GMP_MPFR_BUNDLE_DOWNLOAD_DIR}/${_zip_filename}")
-
-    if(EXISTS "${_zip_path}" AND NOT _bundle_hash STREQUAL "")
+    file(MAKE_DIRECTORY "${NWQEC_PREBUILT_DIR}")
+    set(_zip_path "${NWQEC_PREBUILT_DIR}/${_filename}")
+    
+    # Check if we need to download
+    set(_need_download TRUE)
+    if(EXISTS "${_zip_path}")
         file(SHA256 "${_zip_path}" _existing_hash)
-        if(NOT _existing_hash STREQUAL "${_bundle_hash}")
-            message(STATUS "Cached GMP/MPFR bundle has mismatched hash; re-downloading ${_zip_filename}")
+        if(_existing_hash STREQUAL "${_hash}")
+            set(_need_download FALSE)
+        else()
+            message(STATUS "Cached file hash mismatch; re-downloading ${_filename}")
             file(REMOVE "${_zip_path}")
         endif()
     endif()
 
-    if(NOT EXISTS "${_zip_path}")
-        message(STATUS "Downloading GMP/MPFR bundle (${_bundle_label}) from ${_bundle_url}")
-        if(_bundle_hash STREQUAL "")
-            file(DOWNLOAD "${_bundle_url}" "${_zip_path}" SHOW_PROGRESS)
-        else()
-            file(DOWNLOAD "${_bundle_url}" "${_zip_path}" SHOW_PROGRESS EXPECTED_HASH SHA256=${_bundle_hash})
+    if(_need_download)
+        message(STATUS "Downloading prebuilt GMP/MPFR from ${_url}")
+        file(DOWNLOAD "${_url}" "${_zip_path}" SHOW_PROGRESS EXPECTED_HASH SHA256=${_hash})
+    endif()
+
+    # Extract to platform-specific directory
+    string(REGEX REPLACE "\\.zip$" "" _extract_dir "${_filename}")
+    set(_extract_path "${NWQEC_PREBUILT_DIR}/${_extract_dir}")
+    set(_marker_file "${_extract_path}/.extracted")
+    
+    if(NOT EXISTS "${_marker_file}")
+        if(EXISTS "${_extract_path}")
+            file(REMOVE_RECURSE "${_extract_path}")
         endif()
-    endif()
-
-    string(REGEX REPLACE "\\.zip$" "" _bundle_base "${_zip_filename}")
-    if(_bundle_base STREQUAL "${_zip_filename}")
-        # If the archive name does not end in .zip (unexpected), add a suffix to avoid collisions.
-        set(_bundle_base "${_bundle_base}-unzipped")
-    endif()
-
-    set(_tarball_path "")
-    file(GLOB _existing_tarballs "${NWQEC_GMP_MPFR_BUNDLE_DOWNLOAD_DIR}/*.tar.gz")
-    foreach(_candidate IN LISTS _existing_tarballs)
-        if(_bundle_label AND _candidate MATCHES "${_bundle_label}")
-            set(_tarball_path "${_candidate}")
-            break()
-        elseif(NOT _bundle_label AND _candidate MATCHES "${_bundle_base}")
-            set(_tarball_path "${_candidate}")
-            break()
-        endif()
-    endforeach()
-    if(_tarball_path STREQUAL "" AND _existing_tarballs)
-        list(GET _existing_tarballs 0 _tarball_path)
-    endif()
-
-    if(_tarball_path STREQUAL "")
+        file(MAKE_DIRECTORY "${_extract_path}")
+        
+        # Extract zip -> find tarball -> extract tarball
         execute_process(
-            COMMAND "${CMAKE_COMMAND}" -E tar xvf "${_zip_path}"
-            WORKING_DIRECTORY "${NWQEC_GMP_MPFR_BUNDLE_DOWNLOAD_DIR}"
-            RESULT_VARIABLE _zip_result
-            OUTPUT_VARIABLE _zip_output
-            ERROR_VARIABLE _zip_error)
+            COMMAND "${CMAKE_COMMAND}" -E tar xf "${_zip_path}"
+            WORKING_DIRECTORY "${_extract_path}"
+            RESULT_VARIABLE _zip_result)
         if(NOT _zip_result EQUAL 0)
-            message(FATAL_ERROR "Failed to extract ${_zip_path} (exit code ${_zip_result}): ${_zip_error}")
+            message(FATAL_ERROR "Failed to extract ${_zip_path}")
         endif()
 
-        file(GLOB _extracted_tarballs "${NWQEC_GMP_MPFR_BUNDLE_DOWNLOAD_DIR}/*.tar.gz")
-        foreach(_candidate IN LISTS _extracted_tarballs)
-            if(_bundle_label AND _candidate MATCHES "${_bundle_label}")
-                set(_tarball_path "${_candidate}")
-                break()
-            elseif(NOT _bundle_label AND _candidate MATCHES "${_bundle_base}")
-                set(_tarball_path "${_candidate}")
-                break()
-            endif()
-        endforeach()
-        if(_tarball_path STREQUAL "" AND _extracted_tarballs)
-            list(GET _extracted_tarballs 0 _tarball_path)
+        # Find and extract the tarball inside
+        file(GLOB _tarballs "${_extract_path}/*.tar.gz")
+        if(NOT _tarballs)
+            message(FATAL_ERROR "No .tar.gz found in ${_zip_path}")
         endif()
-    endif()
+        list(GET _tarballs 0 _tarball)
 
-    if(_tarball_path STREQUAL "")
-        message(FATAL_ERROR "Bundle ${_zip_filename} did not contain a .tar.gz payload that matches ${_bundle_label} or ${_bundle_base}.")
-    endif()
-
-    set(_bundle_prefix "${NWQEC_GMP_MPFR_BUNDLE_DOWNLOAD_DIR}/${_bundle_base}")
-    set(_bundle_marker "${_bundle_prefix}/.nwqec-ready")
-    if(NOT EXISTS "${_bundle_marker}")
-        if(EXISTS "${_bundle_prefix}")
-            file(REMOVE_RECURSE "${_bundle_prefix}")
-        endif()
-        file(MAKE_DIRECTORY "${_bundle_prefix}")
         execute_process(
-            COMMAND "${CMAKE_COMMAND}" -E tar xzf "${_tarball_path}"
-            WORKING_DIRECTORY "${_bundle_prefix}"
+            COMMAND "${CMAKE_COMMAND}" -E tar xzf "${_tarball}"
+            WORKING_DIRECTORY "${_extract_path}"
             RESULT_VARIABLE _tar_result)
         if(NOT _tar_result EQUAL 0)
-            message(FATAL_ERROR "Failed to extract ${_tarball_path} (exit code ${_tar_result})")
+            message(FATAL_ERROR "Failed to extract ${_tarball}")
         endif()
-        file(WRITE "${_bundle_marker}" "ready")
+
+        file(WRITE "${_marker_file}" "extracted")
     endif()
 
-    set(${out_root} "${_bundle_prefix}" PARENT_SCOPE)
+    set(${out_root} "${_extract_path}" PARENT_SCOPE)
 endfunction()
 
 # =============================================================================
@@ -251,81 +195,61 @@ endif()
 # Gridsynth dependency (GMP/MPFR) and target
 # =============================================================================
 
-# Try find_package first; if unavailable, create imported targets from paths
-if(NOT NWQEC_FORCE_BUNDLED_GMP_MPFR)
-    find_package(GMP QUIET)
-    find_package(MPFR QUIET)
+if(WIN32)
+    # Windows: Skip GMP/MPFR, use pygridsynth fallback
+    message(STATUS "Windows platform detected: skipping C++ gridsynth, will use pygridsynth fallback")
+    set(NWQEC_WITH_GRIDSYNTH OFF)
+else()
+    # macOS/Linux: Always use prebuilt GMP/MPFR binaries
+    message(STATUS "Setting up prebuilt GMP/MPFR for ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
+    nwqec_setup_prebuilt_deps(_PREBUILT_ROOT)
 
-    if(NOT TARGET GMP::gmp)
-        find_path(GMP_INCLUDE_DIR NAMES gmp.h)
-        find_library(GMP_LIBRARY NAMES gmp)
-        if(GMP_INCLUDE_DIR AND GMP_LIBRARY)
-            add_library(GMP::gmp UNKNOWN IMPORTED)
-            set_target_properties(GMP::gmp PROPERTIES
-                IMPORTED_LOCATION ${GMP_LIBRARY}
-                INTERFACE_INCLUDE_DIRECTORIES ${GMP_INCLUDE_DIR}
-            )
-        endif()
+    if(NOT _PREBUILT_ROOT)
+        message(FATAL_ERROR "No prebuilt GMP/MPFR available for ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
     endif()
 
-    if(NOT TARGET MPFR::MPFR)
-        find_path(MPFR_INCLUDE_DIR NAMES mpfr.h)
-        find_library(MPFR_LIBRARY NAMES mpfr)
-        if(MPFR_INCLUDE_DIR AND MPFR_LIBRARY)
-            add_library(MPFR::MPFR UNKNOWN IMPORTED)
-            set_target_properties(MPFR::MPFR PROPERTIES
-                IMPORTED_LOCATION ${MPFR_LIBRARY}
-                INTERFACE_INCLUDE_DIRECTORIES ${MPFR_INCLUDE_DIR}
-            )
-        endif()
+    set(_INCLUDE_DIR "${_PREBUILT_ROOT}/include")
+    set(_LIB_DIR "${_PREBUILT_ROOT}/lib")
+    
+    if(NOT EXISTS "${_INCLUDE_DIR}" OR NOT EXISTS "${_LIB_DIR}")
+        message(FATAL_ERROR "Prebuilt archive missing include/lib directories at ${_PREBUILT_ROOT}")
     endif()
-endif()
 
-if(NOT (TARGET GMP::gmp AND TARGET MPFR::MPFR))
-    nwqec_prepare_bundled_gmp_mpfr(_NWQEC_GMP_MPFR_ROOT)
+    # Find the library files
+    nwqec_pick_library_from_bundle(_GMP_LIB "${_LIB_DIR}" gmp)
+    nwqec_pick_library_from_bundle(_MPFR_LIB "${_LIB_DIR}" mpfr)
 
-    if(_NWQEC_GMP_MPFR_ROOT)
-        set(_NWQEC_GMP_MPFR_INCLUDE_DIR "${_NWQEC_GMP_MPFR_ROOT}/include")
-        set(_NWQEC_GMP_MPFR_LIB_DIR "${_NWQEC_GMP_MPFR_ROOT}/lib")
-        if(NOT EXISTS "${_NWQEC_GMP_MPFR_INCLUDE_DIR}" OR NOT EXISTS "${_NWQEC_GMP_MPFR_LIB_DIR}")
-            message(FATAL_ERROR "Bundled GMP/MPFR archive is missing expected include/lib directories at ${_NWQEC_GMP_MPFR_ROOT}")
-        endif()
-
-        nwqec_pick_library_from_bundle(_NWQEC_GMP_LIB "${_NWQEC_GMP_MPFR_LIB_DIR}" gmp)
-        nwqec_pick_library_from_bundle(_NWQEC_MPFR_LIB "${_NWQEC_GMP_MPFR_LIB_DIR}" mpfr)
-
-        if(NOT _NWQEC_GMP_LIB OR NOT _NWQEC_MPFR_LIB)
-            message(FATAL_ERROR "Bundled GMP/MPFR archive at ${_NWQEC_GMP_MPFR_ROOT} is missing required libraries.")
-        endif()
-
-        if(NOT TARGET GMP::gmp)
-            add_library(GMP::gmp UNKNOWN IMPORTED)
-            set_target_properties(GMP::gmp PROPERTIES
-                IMPORTED_LOCATION "${_NWQEC_GMP_LIB}"
-                INTERFACE_INCLUDE_DIRECTORIES "${_NWQEC_GMP_MPFR_INCLUDE_DIR}"
-            )
-        endif()
-
-        if(NOT TARGET MPFR::MPFR)
-            add_library(MPFR::MPFR UNKNOWN IMPORTED)
-            set_target_properties(MPFR::MPFR PROPERTIES
-                IMPORTED_LOCATION "${_NWQEC_MPFR_LIB}"
-                INTERFACE_INCLUDE_DIRECTORIES "${_NWQEC_GMP_MPFR_INCLUDE_DIR}"
-            )
-        endif()
-
-        set(_NWQEC_USING_BUNDLED_GMP_MPFR TRUE)
-        message(STATUS "Using bundled GMP/MPFR package from ${_NWQEC_GMP_MPFR_ROOT}")
+    if(NOT _GMP_LIB OR NOT _MPFR_LIB)
+        message(FATAL_ERROR "Required libraries not found in ${_LIB_DIR}")
     endif()
+
+    # Create imported targets
+    add_library(GMP::gmp UNKNOWN IMPORTED)
+    set_target_properties(GMP::gmp PROPERTIES
+        IMPORTED_LOCATION "${_GMP_LIB}"
+        INTERFACE_INCLUDE_DIRECTORIES "${_INCLUDE_DIR}"
+    )
+
+    add_library(MPFR::MPFR UNKNOWN IMPORTED)
+    set_target_properties(MPFR::MPFR PROPERTIES
+        IMPORTED_LOCATION "${_MPFR_LIB}"
+        INTERFACE_INCLUDE_DIRECTORIES "${_INCLUDE_DIR}"
+    )
+
+    set(NWQEC_WITH_GRIDSYNTH ON)
+    message(STATUS "Using prebuilt GMP/MPFR from ${_PREBUILT_ROOT}")
 endif()
 
-if(NOT (TARGET GMP::gmp AND TARGET MPFR::MPFR))
-    message(FATAL_ERROR "GMP/MPFR libraries are required but were not found, and no compatible bundled archive is defined for this platform. Set NWQEC_GMP_MPFR_BUNDLE_URL_OVERRIDE (and hash) or install GMP/MPFR development packages manually.")
+# Interface target for gridsynth that carries MP deps (only if available)
+if(NWQEC_WITH_GRIDSYNTH)
+    add_library(nwqec_gridsynth INTERFACE)
+    target_link_libraries(nwqec_gridsynth INTERFACE nwqec GMP::gmp MPFR::MPFR)
+    target_compile_definitions(nwqec_gridsynth INTERFACE NWQEC_WITH_GRIDSYNTH_CPP=1)
+else()
+    add_library(nwqec_gridsynth INTERFACE)
+    target_link_libraries(nwqec_gridsynth INTERFACE nwqec)
+    target_compile_definitions(nwqec_gridsynth INTERFACE NWQEC_WITH_GRIDSYNTH_CPP=0)
 endif()
-
-# Interface target for gridsynth that carries MP deps
-add_library(nwqec_gridsynth INTERFACE)
-target_link_libraries(nwqec_gridsynth INTERFACE nwqec GMP::gmp MPFR::MPFR)
 
 # =============================================================================
 # Executables
@@ -337,11 +261,15 @@ target_link_libraries(transpiler PRIVATE nwqec_gridsynth)
 target_compile_definitions(transpiler PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_options(transpiler PRIVATE ${COMMON_COMPILE_OPTIONS})
 
-add_executable(gridsynth tools/gridsynth.cpp)
-target_link_libraries(gridsynth PRIVATE nwqec_gridsynth)
-target_compile_definitions(gridsynth PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_options(gridsynth PRIVATE ${COMMON_COMPILE_OPTIONS})
-list(APPEND _NWQEC_CLI_TARGETS gridsynth)
+if(NWQEC_WITH_GRIDSYNTH)
+    add_executable(gridsynth tools/gridsynth.cpp)
+    target_link_libraries(gridsynth PRIVATE nwqec_gridsynth)
+    target_compile_definitions(gridsynth PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_options(gridsynth PRIVATE ${COMMON_COMPILE_OPTIONS})
+    list(APPEND _NWQEC_CLI_TARGETS gridsynth)
+else()
+    message(STATUS "Skipping gridsynth CLI (GMP/MPFR not available)")
+endif()
 
 # =============================================================================
 # Build type specific tweaks
@@ -374,14 +302,26 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 message(STATUS "Configured executable: transpiler")
-message(STATUS "Configured executable: gridsynth")
+if(NWQEC_WITH_GRIDSYNTH)
+    message(STATUS "Configured executable: gridsynth (with GMP/MPFR)")
+else()
+    message(STATUS "Skipped gridsynth executable (GMP/MPFR not available)")
+    if(WIN32)
+        message(STATUS "  → Windows users can use pygridsynth instead: pip install pygridsynth")
+    endif()
+endif()
 
 # =============================================================================
 # Install rules (CLI binaries and headers)
 # =============================================================================
 include(GNUInstallDirs)
-install(TARGETS transpiler gridsynth
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(NWQEC_WITH_GRIDSYNTH)
+    install(TARGETS transpiler gridsynth
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+else()
+    install(TARGETS transpiler
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 # Install interface libraries and export targets
 install(TARGETS nwqec nwqec_gridsynth
@@ -397,8 +337,7 @@ install(EXPORT NWQECTargets
 # Package config files
 include(CMakePackageConfigHelpers)
 
-# Record whether gridsynth deps were present at build
-set(NWQEC_WITH_GRIDSYNTH ON)
+# Record whether gridsynth deps were present at build (already set above)
 
 configure_package_config_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NWQECConfig.cmake.in
@@ -426,8 +365,10 @@ if(BUILD_TESTING)
              COMMAND $<TARGET_FILE:transpiler> --help)
     add_test(NAME transpiler_qft
              COMMAND $<TARGET_FILE:transpiler> --qft 4 --no-save)
-    add_test(NAME gridsynth_basic
-             COMMAND $<TARGET_FILE:gridsynth> pi/4 10)
+    if(NWQEC_WITH_GRIDSYNTH)
+        add_test(NAME gridsynth_basic
+                 COMMAND $<TARGET_FILE:gridsynth> pi/4 10)
+    endif()
 endif()
 
 # =============================================================================
@@ -441,7 +382,7 @@ if(NWQEC_BUILD_PYTHON)
         # Ensure the produced module is packaged as nwqec._core
         set_target_properties(nwqec_ext PROPERTIES OUTPUT_NAME "_core")
 
-        target_link_libraries(nwqec_ext PRIVATE nwqec GMP::gmp MPFR::MPFR)
+        target_link_libraries(nwqec_ext PRIVATE nwqec_gridsynth)
         target_compile_definitions(nwqec_ext PRIVATE PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
         target_compile_options(nwqec_ext PRIVATE ${COMMON_COMPILE_OPTIONS})
         # Install extension into the correct Python platlib dir when building a wheel

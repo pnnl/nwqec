@@ -84,6 +84,13 @@ namespace
                                                      bool silent,
                                                      double epsilon_override = -1.0)
     {
+#ifdef NWQEC_WITH_GRIDSYNTH_CPP
+        if (!NWQEC_WITH_GRIDSYNTH_CPP) {
+            throw std::runtime_error("C++ gridsynth backend not available on this platform. Use pygridsynth instead.");
+        }
+#else
+        throw std::runtime_error("C++ gridsynth backend not available on this platform. Use pygridsynth instead.");
+#endif
         NWQEC::PassManager pm;
         auto up = std::make_unique<NWQEC::Circuit>(circuit); // copy for ownership
         auto out = pm.apply_passes(std::move(up), to_pbc, to_clifford_reduction, keep_cx, t_pauli_opt, remove_pauli, keep_ccx, silent, epsilon_override);
@@ -96,7 +103,11 @@ PYBIND11_MODULE(_core, m)
 {
     m.doc() = "NWQEC Python bindings";
 
-    m.attr("WITH_GRIDSYNTH_CPP") = py::bool_(true);
+#ifdef NWQEC_WITH_GRIDSYNTH_CPP
+    m.attr("WITH_GRIDSYNTH_CPP") = py::bool_(NWQEC_WITH_GRIDSYNTH_CPP);
+#else
+    m.attr("WITH_GRIDSYNTH_CPP") = py::bool_(false);
+#endif
 
     // Circuit class (owned by Python via unique_ptr)
     py::class_<NWQEC::Circuit, std::unique_ptr<NWQEC::Circuit>>(m, "Circuit")
