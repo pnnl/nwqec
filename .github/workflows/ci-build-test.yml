@@ -2,6 +2,8 @@ name: Build and Install (Multi-Platform)
 
 on:
   workflow_dispatch:
+  push:
+  pull_request:
   workflow_call:
 
 env:
