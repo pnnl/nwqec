@@ -361,15 +361,13 @@ install(FILES
 # Tests (CLI)
 # =============================================================================
 include(CTest)
-if(BUILD_TESTING)
+if(BUILD_TESTING AND NWQEC_WITH_GRIDSYNTH)
     add_test(NAME transpiler_help
              COMMAND $<TARGET_FILE:transpiler> --help)
     add_test(NAME transpiler_qft
              COMMAND $<TARGET_FILE:transpiler> --qft 4 --no-save)
-    if(NWQEC_WITH_GRIDSYNTH)
-        add_test(NAME gridsynth_basic
-                 COMMAND $<TARGET_FILE:gridsynth> pi/4 10)
-    endif()
+    add_test(NAME gridsynth_basic
+             COMMAND $<TARGET_FILE:gridsynth> pi/4 10)
 endif()
 
 # =============================================================================
