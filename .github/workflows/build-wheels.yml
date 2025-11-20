@@ -24,9 +24,9 @@ jobs:
             cibw_archs: "x86_64"
           - os: ubuntu-22.04-arm
             cibw_archs: "aarch64" 
-          - os: macos-13
+          - os: macos-15-intel
             cibw_archs: "x86_64"
-          - os: macos-14
+          - os: macos-latest
             cibw_archs: "arm64"
     
     steps:
