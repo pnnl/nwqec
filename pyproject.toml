@@ -50,11 +50,7 @@ skip = [
 
 # Platform-specific settings
 [tool.cibuildwheel.macos]
-archs = ["x86_64", "arm64"]
 environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
-
-[tool.cibuildwheel.linux]
-archs = ["x86_64", "aarch64"]
 
 # Test the built wheels
 test-command = "python -c 'import nwqec; print(\"Version:\", nwqec.__version__); print(\"WITH_GRIDSYNTH_CPP:\", nwqec.WITH_GRIDSYNTH_CPP)'"
