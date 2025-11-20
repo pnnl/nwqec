@@ -6,7 +6,7 @@ NWQEC is a C++/Python toolkit for fault-tolerant quantum circuit transpilation. 
 - Parsing OpenQASM 2.0 circuits into an internal circuit representation.
 - Converting arbitrary circuits to Clifford+T using the gridsynth algorithm [1].
 - Producing Pauli-Based Circuits (PBC) with Tfuse optimisation for T-count reduction [2,3].
-- Applying the TACO (Clifford-reduction) pipeline [4], which preserves circuit parallelism while reducing non-T overhead.
+- Applying Clifford reduction optimization [4], which preserves circuit parallelism while reducing non-T overhead.
 - Leveraging a tableau-based IR for high-performance PBC passes [2].
 
 ## Requirements
@@ -54,10 +54,10 @@ pbc_opt = nwqec.fuse_t(pbc)
 print("T count before Tfuse:", pbc.count_ops().get("t_pauli", 0))
 print("T count after Tfuse:", pbc_opt.count_ops().get("t_pauli", 0))
 
-# Clifford reduction (TACO) pipeline
-taco = nwqec.to_taco(circuit)
-print(f"Depth reduction of TACO over Clifford+T: {clifford_t.depth() / taco.depth():.2f}x")
-print(f"Depth reduction of TACO over PBC: {pbc.depth() / taco.depth():.2f}x")
+# Clifford reduction optimization
+clifford_reduced = nwqec.to_clifford_reduction(circuit)
+print(f"Depth reduction over Clifford+T: {clifford_t.depth() / clifford_reduced.depth():.2f}x")
+print(f"Depth reduction over PBC: {pbc.depth() / clifford_reduced.depth():.2f}x")
 ```
 
 ## Further Documentation

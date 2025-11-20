@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(NWQEC VERSION 1.0 LANGUAGES CXX)
+project(NWQEC VERSION 0.1.0 LANGUAGES CXX)
 
 # =============================================================================
 # Project Configuration
@@ -335,7 +335,7 @@ install(FILES
 include(CTest)
 if(BUILD_TESTING)
     add_test(NAME nwqec_help
-             COMMAND $<TARGET_FILE:nwqec-cli> --help)
+             COMMAND $<TARGET_FILE:nwqec-cli> -h)
     add_test(NAME nwqec_qft
              COMMAND $<TARGET_FILE:nwqec-cli> --qft 4 --no-save)
     add_test(NAME gridsynth_basic

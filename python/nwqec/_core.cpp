@@ -98,14 +98,14 @@ namespace
         std::vector<NWQEC::PassType> passes;
         
         if (t_pauli_opt) {
-            // Just T-optimization for PBC circuits
-            passes = {NWQEC::PassType::TFUSE};
+            // T-optimization only - assumes input is already PBC
+            passes = NWQEC::PassSequences::T_OPTIMIZATION_ONLY;
         } else if (to_pbc) {
-            passes = NWQEC::PassSequences::TO_PBC_BASIC;
+            passes = NWQEC::PassSequences::TO_PBC;
         } else if (to_clifford_reduction) {
-            passes = NWQEC::PassSequences::CLIFFORD_REDUCTION;
+            passes = NWQEC::PassSequences::TO_CLIFFORD_REDUCTION;
         } else {
-            // Default: Clifford+T (always available)
+            // Default: Clifford+T conversion
             passes = NWQEC::PassSequences::TO_CLIFFORD_T;
         }
         
@@ -260,28 +260,45 @@ PYBIND11_MODULE(_core, m)
 
     m.def(
         "to_pbc",
-        [](const NWQEC::Circuit &circuit, bool keep_cx, py::object epsilon)
+        [](const NWQEC::Circuit &circuit, bool keep_cx, bool optimize_t_count, py::object epsilon)
         {
             double eps_override = epsilon.is_none() ? -1.0 : epsilon.cast<double>();
-            return apply_transforms(circuit,
-                                    /*to_pbc=*/true,
-                                    /*to_clifford_reduction=*/false,
-                                    /*keep_cx=*/keep_cx,
-                                    /*t_pauli_opt=*/false,
-                                    /*remove_pauli=*/false,
-                                    /*keep_ccx=*/false,
-                                    /*silent=*/true,
-                                    /*epsilon_override=*/eps_override);
+            
+            // Use optimized PBC pipeline if T-optimization is requested
+            if (optimize_t_count) {
+                NWQEC::Transpiler transpiler;
+                NWQEC::PassConfig config;
+                config.keep_cx = keep_cx;
+                config.epsilon_override = eps_override;
+                config.silent = true;
+                
+                auto circuit_copy = std::make_unique<NWQEC::Circuit>(circuit);
+                auto passes = NWQEC::PassSequences::TO_PBC_OPTIMIZED;
+                
+                return transpiler.execute_passes(std::move(circuit_copy), passes, config);
+            } else {
+                return apply_transforms(circuit,
+                                        /*to_pbc=*/true,
+                                        /*to_clifford_reduction=*/false,
+                                        /*keep_cx=*/keep_cx,
+                                        /*t_pauli_opt=*/false,
+                                        /*remove_pauli=*/false,
+                                        /*keep_ccx=*/false,
+                                        /*silent=*/true,
+                                        /*epsilon_override=*/eps_override);
+            }
         },
         py::arg("circuit"),
         py::arg("keep_cx") = false,
+        py::arg("optimize_t_count") = false,
         py::arg("epsilon") = py::none(),
         "Transpile the input circuit to a Pauli-Based Circuit (PBC) form and return a new Circuit.\n"
         "- keep_cx: preserve CX gates where possible in the PBC form\n"
+        "- optimize_t_count: apply T-count optimization after PBC conversion\n"
         "- epsilon: optional absolute tolerance for RZ synthesis (applied to all angles)");
 
     m.def(
-        "to_taco",
+        "to_clifford_reduction",
         [](const NWQEC::Circuit &circuit, py::object epsilon)
         {
             double eps_override = epsilon.is_none() ? -1.0 : epsilon.cast<double>();
@@ -297,8 +314,11 @@ PYBIND11_MODULE(_core, m)
         },
         py::arg("circuit"),
         py::arg("epsilon") = py::none(),
-        "Apply the Clifford reduction (TACO) optimisation pipeline and return a new Circuit.\n"
+        "Apply the Clifford reduction optimization and return a new Circuit.\n"
+        "This optimization preserves circuit parallelism while reducing non-T overhead.\n"
+        "Based on the technique from: Wang et al. 'Optimizing FTQC Programs through QEC Transpiler and Architecture Codesign' (2024)\n"
         "- epsilon: optional absolute tolerance for RZ synthesis (applied to all angles)");
+
 
     // fuse_t: apply only the T-Pauli fusion stage within the PBC pipeline
     m.def(

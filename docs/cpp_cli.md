@@ -31,7 +31,7 @@ CLI Usage
 ---------
 Basic syntax: `nwqec-cli [OPTIONS] <INPUT>`
 
-Get help: `nwqec-cli --help` or `nwqec-cli -h`
+Get help: `nwqec-cli -h`
 
 ### Input Sources
 ```bash
@@ -43,25 +43,36 @@ nwqec-cli --qft 4        # QFT circuit with 4 qubits
 nwqec-cli --shor 3       # Shor test circuit for 3-bit numbers
 ```
 
-##### Transpilation Passes
+### Transpilation Workflows
+The transpilation follows a clear three-step process:
+
+1. **Basic Processing**: `DECOMPOSE` → `REMOVE_TRIVIAL_RZ` → `SYNTHESIZE_RZ`
+2. **Choose Format**: Clifford+T (default), PBC, or Clifford Reduction  
+3. **Optional Optimization**: T-count optimization (for PBC only)
+
 ```bash
 # Default: Clifford+T conversion
 nwqec-cli circuit.qasm
 
-# Pauli-Based Circuit (PBC) 
+# Clifford+T with CCX gate preservation
+nwqec-cli circuit.qasm --keep-ccx
+
+# Pauli-Based Circuit (PBC) format
 nwqec-cli circuit.qasm --pbc
 
-# Clifford Reduction (TACO)
-nwqec-cli circuit.qasm --cr  
-
-# Restricted PBC (preserves CCX gates)
-nwqec-cli circuit.qasm --red-pbc
+# PBC with CX gate preservation
+nwqec-cli circuit.qasm --pbc --keep-cx
 
 # PBC with T-count optimization
 nwqec-cli circuit.qasm --pbc --t-opt
+
+# Clifford Reduction optimization
+nwqec-cli circuit.qasm --cr
 ```
 
-**Note**: PBC (`--pbc`), Clifford Reduction (`--cr`), and Restricted PBC (`--red-pbc`) are mutually exclusive.
+**Important**: Format options (`--pbc`, `--cr`) are mutually exclusive.  
+T-optimization (`--t-opt`) and CX preservation (`--keep-cx`) can only be combined with `--pbc`.  
+Clifford Reduction (`--cr`) is based on techniques from Wang et al. "Optimizing FTQC Programs through QEC Transpiler and Architecture Codesign" (2024).
 
 ### Output Options
 ```bash
@@ -70,7 +81,6 @@ nwqec-cli circuit.qasm
 
 # Custom output filename
 nwqec-cli circuit.qasm -o my_output.qasm
-nwqec-cli circuit.qasm --output my_output.qasm
 
 # Don't save file (display stats only)
 nwqec-cli circuit.qasm --no-save
@@ -96,11 +106,11 @@ nwqec-cli circuit.qasm --pbc --t-opt -o optimized.qasm
 # Generate QFT, apply Clifford reduction, don't save
 nwqec-cli --qft 8 --cr --no-save
 
-# Shor circuit with restricted PBC
-nwqec-cli --shor 4 --red-pbc
+# Shor circuit with PBC and CX preservation
+nwqec-cli --shor 4 --pbc --keep-cx
 
 # Advanced: PBC with all options
-nwqec-cli large_circuit.qasm --pbc --t-opt --remove-pauli --keep-ccx
+nwqec-cli large_circuit.qasm --pbc --t-opt --keep-cx --remove-pauli
 ```
 
 Gridsynth Usage

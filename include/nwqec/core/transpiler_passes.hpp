@@ -17,7 +17,7 @@ enum class PassType {
     
     // Circuit format conversions  
     TO_PBC,                 // Convert to Pauli-Based Circuit format
-    CLIFFORD_REDUCTION,     // Apply Clifford reduction (TACO) pipeline
+    CLIFFORD_REDUCTION,     // Apply Clifford reduction optimization
     
     // RZ synthesis (requires gridsynth backend)
     SYNTHESIZE_RZ,          // Synthesize RZ gates to Clifford+T (needs GMP/MPFR)
@@ -45,49 +45,72 @@ inline std::string pass_type_to_string(PassType type) {
 
 /**
  * @brief Predefined pass sequences for common workflows
+ * 
+ * The transpilation workflow follows this pattern:
+ * 1. Basic Processing: DECOMPOSE → REMOVE_TRIVIAL_RZ → SYNTHESIZE_RZ
+ * 2. Choose transformation: Clifford+T, PBC, or Clifford Reduction
+ * 3. Optional optimizations (T-fusion for PBC, cleanup passes)
  */
 namespace PassSequences {
-    // Convert to Clifford+T (requires gridsynth)
-    inline const std::vector<PassType> TO_CLIFFORD_T = {
-        PassType::DECOMPOSE,
-        PassType::REMOVE_TRIVIAL_RZ,
-        PassType::SYNTHESIZE_RZ,  // Requires gridsynth
-        PassType::GATE_FUSION
-    };
+    // === BASIC PROCESSING ===
     
-    // Convert to Clifford+T+RZ (no gridsynth needed - stops before RZ synthesis)
-    inline const std::vector<PassType> TO_CLIFFORD_T_RZ = {
+    // Standard preprocessing: decompose and clean up trivial RZ gates
+    inline const std::vector<PassType> BASIC_PREPROCESSING = {
         PassType::DECOMPOSE,
         PassType::REMOVE_TRIVIAL_RZ
     };
     
-    // Convert to PBC format
-    inline const std::vector<PassType> TO_PBC_BASIC = {
+    // Full preprocessing including RZ synthesis to Clifford+T
+    inline const std::vector<PassType> FULL_PREPROCESSING = {
         PassType::DECOMPOSE,
         PassType::REMOVE_TRIVIAL_RZ,
-        PassType::SYNTHESIZE_RZ,  // Requires gridsynth
+        PassType::SYNTHESIZE_RZ
+    };
+    
+    // === COMPLETE WORKFLOWS ===
+    
+    // Convert to Clifford+T with final gate fusion
+    inline const std::vector<PassType> TO_CLIFFORD_T = {
+        PassType::DECOMPOSE,
+        PassType::REMOVE_TRIVIAL_RZ,
+        PassType::SYNTHESIZE_RZ,
+        PassType::GATE_FUSION
+    };
+    
+    // Convert to PBC format (synthesize RZ first, then convert to PBC)
+    inline const std::vector<PassType> TO_PBC = {
+        PassType::DECOMPOSE,
+        PassType::REMOVE_TRIVIAL_RZ,
+        PassType::SYNTHESIZE_RZ,
         PassType::TO_PBC
     };
     
-    // PBC with T-count optimization  
+    // Convert to PBC format with T-count optimization
     inline const std::vector<PassType> TO_PBC_OPTIMIZED = {
         PassType::DECOMPOSE,
         PassType::REMOVE_TRIVIAL_RZ,
-        PassType::SYNTHESIZE_RZ,  // Requires gridsynth
+        PassType::SYNTHESIZE_RZ,
         PassType::TO_PBC,
         PassType::TFUSE
     };
     
-    // Clifford reduction (TACO) pipeline
-    inline const std::vector<PassType> CLIFFORD_REDUCTION = {
+    // Apply Clifford reduction optimization (from FTQC codesign paper)
+    inline const std::vector<PassType> TO_CLIFFORD_REDUCTION = {
         PassType::DECOMPOSE,
         PassType::REMOVE_TRIVIAL_RZ,
-        PassType::SYNTHESIZE_RZ,  // Requires gridsynth
+        PassType::SYNTHESIZE_RZ,
         PassType::CLIFFORD_REDUCTION
     };
     
-    // Post-synthesis cleanup (after manual RZ synthesis)
-    inline const std::vector<PassType> POST_SYNTHESIS_CLEANUP = {
+    // === INCREMENTAL PASSES (for composing workflows) ===
+    
+    // Just T-optimization (assumes input is already PBC)
+    inline const std::vector<PassType> T_OPTIMIZATION_ONLY = {
+        PassType::TFUSE
+    };
+    
+    // Post-processing cleanup
+    inline const std::vector<PassType> CLEANUP = {
         PassType::GATE_FUSION,
         PassType::REMOVE_TRIVIAL_RZ
     };
