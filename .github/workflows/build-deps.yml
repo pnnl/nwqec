@@ -1,8 +1,9 @@
 name: Build Dependency Binaries
 
 on:
-  workflow_dispatch:
-  workflow_call:
+  # Disabled - kept for reference only
+  # workflow_dispatch:
+  # workflow_call:
 
 env:
   GMP_VERSION: "6.3.0"

@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - local_gmp_mpfr  # Trigger on your current branch for testing
     tags:
       - 'v*'  # Trigger on version tags
   pull_request:

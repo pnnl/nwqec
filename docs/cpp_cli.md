@@ -4,8 +4,8 @@ C++ CLI Guide
 Overview
 --------
 The repository provides two C++ command-line tools:
-- `nwqec-cli`: parse OpenQASM, transpile to Clifford+T or PBC, optionally optimize T rotations, and export QASM/statistics.
-- `gridsynth`: synthesize a single RZ angle into a Clifford+T sequence.
+- `./nwqec-cli`: parse OpenQASM, transpile to Clifford+T or PBC, optionally optimize T rotations, and export QASM/statistics.
+- `./gridsynth`: synthesize a single RZ angle into a Clifford+T sequence.
 
 **Platform Support:**
 NWQEC is supported on macOS and Linux. Both tools are available with automatic prebuilt GMP/MPFR download.
@@ -29,18 +29,18 @@ Optional CMake flags:
 
 CLI Usage
 ---------
-Basic syntax: `nwqec-cli [OPTIONS] <INPUT>`
+Basic syntax: `./nwqec-cli [OPTIONS] <INPUT>`
 
-Get help: `nwqec-cli -h`
+Get help: `./nwqec-cli -h`
 
 ### Input Sources
 ```bash
 # Parse QASM file
-nwqec-cli circuit.qasm
+./nwqec-cli circuit.qasm
 
 # Generate test circuits
-nwqec-cli --qft 4        # QFT circuit with 4 qubits  
-nwqec-cli --shor 3       # Shor test circuit for 3-bit numbers
+./nwqec-cli --qft 4        # QFT circuit with 4 qubits  
+./nwqec-cli --shor 3       # Shor test circuit for 3-bit numbers
 ```
 
 ### Transpilation Workflows
@@ -52,22 +52,22 @@ The transpilation follows a clear three-step process:
 
 ```bash
 # Default: Clifford+T conversion
-nwqec-cli circuit.qasm
+./nwqec-cli circuit.qasm
 
 # Clifford+T with CCX gate preservation
-nwqec-cli circuit.qasm --keep-ccx
+./nwqec-cli circuit.qasm --keep-ccx
 
 # Pauli-Based Circuit (PBC) format
-nwqec-cli circuit.qasm --pbc
+./nwqec-cli circuit.qasm --pbc
 
 # PBC with CX gate preservation
-nwqec-cli circuit.qasm --pbc --keep-cx
+./nwqec-cli circuit.qasm --pbc --keep-cx
 
 # PBC with T-count optimization
-nwqec-cli circuit.qasm --pbc --t-opt
+./nwqec-cli circuit.qasm --pbc --t-opt
 
 # Clifford Reduction optimization
-nwqec-cli circuit.qasm --cr
+./nwqec-cli circuit.qasm --cr
 ```
 
 **Important**: Format options (`--pbc`, `--cr`) are mutually exclusive.  
@@ -77,57 +77,57 @@ Clifford Reduction (`--cr`) is based on techniques from Wang et al. "Optimizing 
 ### Output Options
 ```bash
 # Default: saves to <input>_transpiled.qasm
-nwqec-cli circuit.qasm
+./nwqec-cli circuit.qasm
 
 # Custom output filename
-nwqec-cli circuit.qasm -o my_output.qasm
+./nwqec-cli circuit.qasm -o my_output.qasm
 
 # Don't save file (display stats only)
-nwqec-cli circuit.qasm --no-save
+./nwqec-cli circuit.qasm --no-save
 ```
 
 ### Analysis Options
 ```bash
 # Remove Pauli gates from output
-nwqec-cli circuit.qasm --remove-pauli
+./nwqec-cli circuit.qasm --remove-pauli
 
 # Preserve CCX gates during decomposition
-nwqec-cli circuit.qasm --keep-ccx
+./nwqec-cli circuit.qasm --keep-ccx
 ```
 
 ### Complete Examples
 ```bash
 # Basic transpilation
-nwqec-cli qft_n4.qasm
+./nwqec-cli qft_n4.qasm
 
 # PBC with T optimization, custom output
-nwqec-cli circuit.qasm --pbc --t-opt -o optimized.qasm
+./nwqec-cli circuit.qasm --pbc --t-opt -o optimized.qasm
 
 # Generate QFT, apply Clifford reduction, don't save
-nwqec-cli --qft 8 --cr --no-save
+./nwqec-cli --qft 8 --cr --no-save
 
 # Shor circuit with PBC and CX preservation
-nwqec-cli --shor 4 --pbc --keep-cx
+./nwqec-cli --shor 4 --pbc --keep-cx
 
 # Advanced: PBC with all options
-nwqec-cli large_circuit.qasm --pbc --t-opt --keep-cx --remove-pauli
+./nwqec-cli large_circuit.qasm --pbc --t-opt --keep-cx --remove-pauli
 ```
 
 Gridsynth Usage
 ---------------
 **Available on macOS/Linux only**
 
-Syntax: `gridsynth <angle> <precision_bits>`
+Syntax: `./gridsynth <angle> <precision_bits>`
 
 ```bash
 # Synthesize π/8 rotation with 12 bits of precision
-gridsynth pi/8 12
+./gridsynth pi/8 12
 
 # Synthesize π/4 rotation with 10 bits of precision  
-gridsynth pi/4 10
+./gridsynth pi/4 10
 
 # Synthesize arbitrary angle
-gridsynth 0.785398 15  # approximately π/4
+./gridsynth 0.785398 15  # approximately π/4
 ```
 
 

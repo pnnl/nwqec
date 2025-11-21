@@ -10,18 +10,28 @@ NWQEC is a C++/Python toolkit for fault-tolerant quantum circuit transpilation. 
 - Leveraging a tableau-based IR for high-performance PBC passes [2].
 
 ## Requirements
-- Python 3.8+
+- Python 3.8+ (for PyPI installation)
+
+For building from source:
 - C++17 toolchain and CMake ≥ 3.16
 - Python build dependencies: `scikit-build-core`, `pybind11`
 
 ## Platform Support
-NWQEC is supported on macOS and Linux with full C++ gridsynth backend functionality. The build system automatically downloads prebuilt GMP/MPFR binaries for these platforms.
+NWQEC relies on GMP and MPFR mathematical libraries and is currently supported on macOS and Linux with full C++ gridsynth backend functionality. The build system automatically downloads prebuilt GMP/MPFR binaries for these platforms.
+
+For Windows users, we recommend using WSL (Windows Subsystem for Linux).
 
 The C++ gridsynth backend provides significant acceleration for Clifford+T synthesis (20× speed-up on an 18-qubit QFT benchmark).
 
-## Installing NWQEC
+## Installation
 
-### Python Package (Recommended)
+### Install from PyPI (Recommended)
+```bash
+pip install nwqec
+```
+
+### Build from Source
+For development or building custom wheels:
 ```bash
 pip install -U pip
 pip install scikit-build-core pybind11
@@ -29,12 +39,18 @@ pip install .
 ```
 
 ### C++ Development
+For advanced users or performance-critical applications, NWQEC provides native C++ executables that offer direct access to the transpilation engine without Python overhead.
+
+Built executables:
+- `nwqec-cli`: Complete circuit transpilation pipeline with QASM I/O
+- `gridsynth`: High-precision single-angle synthesis (header-only C++ implementation)
+
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-Prebuilt GMP/MPFR binaries are automatically downloaded during the build process.
+Prebuilt GMP/MPFR binaries are automatically downloaded during the build process. See [C++ CLI guide](docs/cpp_cli.md) for details.
 
 
 ## Quick Start (Python)

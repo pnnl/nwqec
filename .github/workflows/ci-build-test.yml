@@ -1,8 +1,9 @@
 name: Build and Install (Multi-Platform)
 
 on:
-  workflow_dispatch:
-  workflow_call:
+  # Disabled - kept for reference only
+  # workflow_dispatch:
+  # workflow_call:
 
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: 4
