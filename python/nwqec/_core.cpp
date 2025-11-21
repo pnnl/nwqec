@@ -9,10 +9,11 @@
 #include <iomanip>
 
 #include "nwqec/parser/qasm_parser.hpp"
-#include "nwqec/core/pass_manager.hpp"
 #include "nwqec/core/operation.hpp"
 #include "nwqec/core/pauli_op.hpp"
 #include "nwqec/core/constants.hpp"
+
+#include "nwqec/core/transpiler.hpp"
 
 namespace py = pybind11;
 
@@ -73,7 +74,7 @@ namespace
         return false;
     }
 
-    // Internal helper to run transforms with optional Python RZ synthesis fallback
+    // Helper to run transforms using the Transpiler
     std::unique_ptr<NWQEC::Circuit> apply_transforms(const NWQEC::Circuit &circuit,
                                                      bool to_pbc,
                                                      bool to_clifford_reduction,
@@ -84,105 +85,36 @@ namespace
                                                      bool silent,
                                                      double epsilon_override = -1.0)
     {
-        NWQEC::PassManager pm;
-        auto up = std::make_unique<NWQEC::Circuit>(circuit); // copy for ownership
-        auto out = pm.apply_passes(std::move(up), to_pbc, to_clifford_reduction, keep_cx, t_pauli_opt, remove_pauli, keep_ccx, silent, epsilon_override);
-
-#if !NWQEC_WITH_GRIDSYNTH_CPP
-        // Attempt transparent Python fallback for RZ synthesis if needed
-        bool has_rz = false;
-        for (const auto &op : out->get_operations())
-        {
-            if (op.get_type() == NWQEC::Operation::Type::RZ)
-            {
-                has_rz = true;
-                break;
-            }
+        NWQEC::Transpiler transpiler;
+        NWQEC::PassConfig config;
+        config.keep_ccx = keep_ccx;
+        config.keep_cx = keep_cx;
+        config.epsilon_override = epsilon_override;
+        config.silent = silent;
+        
+        auto circuit_copy = std::make_unique<NWQEC::Circuit>(circuit);
+        
+        // Choose the appropriate pass sequence
+        std::vector<NWQEC::PassType> passes;
+        
+        if (t_pauli_opt) {
+            // T-optimization only - assumes input is already PBC
+            passes = NWQEC::PassSequences::T_OPTIMIZATION_ONLY;
+        } else if (to_pbc) {
+            passes = NWQEC::PassSequences::TO_PBC;
+        } else if (to_clifford_reduction) {
+            passes = NWQEC::PassSequences::TO_CLIFFORD_REDUCTION;
+        } else {
+            // Default: Clifford+T conversion
+            passes = NWQEC::PassSequences::TO_CLIFFORD_T;
         }
-        if (has_rz)
-        {
-            try
-            {
-                // Defaults for fallback
-                const int dps = NWQEC::DEFAULT_MPMATH_DPS;
-                const char *module_name = "pygridsynth.gridsynth";
-
-                py::module_ mp = py::module_::import("mpmath");
-                mp.attr("mp").attr("dps") = dps; // precision
-                py::object mpmathify = mp.attr("mpmathify");
-                py::module_ mod = py::module_::import(module_name);
-                if (!py::hasattr(mod, "gridsynth_gates"))
-                {
-                    throw std::runtime_error("pygridsynth module missing 'gridsynth_gates'");
-                }
-                py::object gridsynth_gates = mod.attr("gridsynth_gates");
-
-                auto new_circuit = std::make_unique<NWQEC::Circuit>();
-                new_circuit->add_qreg("q", out->get_num_qubits());
-                new_circuit->add_creg("c", out->get_num_bits());
-
-                const auto &ops = out->get_operations();
-                for (const auto &op : ops)
-                {
-                    if (op.get_type() != NWQEC::Operation::Type::RZ)
-                    {
-                        new_circuit->add_operation(op);
-                        continue;
-                    }
-                    const auto &params = op.get_parameters();
-                    if (params.empty())
-                        continue;
-                    std::string theta_str = std::to_string(params[0]);
-                    // Determine epsilon per angle: default to 2 orders smaller than theta, or use override if provided
-                    double eps_val = (epsilon_override >= 0.0) ? epsilon_override : std::abs(params[0]) * NWQEC::DEFAULT_EPSILON_MULTIPLIER;
-                    std::ostringstream eps_ss;
-                    eps_ss.setf(std::ios::scientific);
-                    eps_ss << std::setprecision(16) << eps_val;
-                    std::string eps_str = eps_ss.str();
-                    py::object theta = mpmathify(theta_str);
-                    py::object epsilon = mpmathify(eps_str);
-                    std::string gates = py::cast<std::string>(gridsynth_gates(theta, epsilon));
-                    const auto &qs = op.get_qubits();
-                    for (const char &g : gates)
-                    {
-                        switch (g)
-                        {
-                        case 'X':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::X, qs));
-                            break;
-                        case 'Y':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::Y, qs));
-                            break;
-                        case 'Z':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::Z, qs));
-                            break;
-                        case 'H':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::H, qs));
-                            break;
-                        case 'S':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::S, qs));
-                            break;
-                        case 'T':
-                            new_circuit->add_operation(NWQEC::Operation(NWQEC::Operation::Type::T, qs));
-                            break;
-                        case 'W':
-                            break;
-                        default:
-                            throw std::runtime_error(std::string("Unknown gate from pygridsynth: ") + g);
-                        }
-                    }
-                }
-                out = std::move(new_circuit);
-            }
-            catch (const std::exception &)
-            {
-                // Neither C++ gridsynth nor pygridsynth available
-                std::cerr << "RZ synthesis not available. Install GMP+MPFR and reinstall the module, or `pip install pygridsynth mpmath`.\n";
-            }
+        
+        // Add cleanup passes if requested
+        if (remove_pauli) {
+            passes.push_back(NWQEC::PassType::REMOVE_PAULI);
         }
-#endif
-
-        return out;
+        
+        return transpiler.execute_passes(std::move(circuit_copy), passes, config);
     }
 }
 
@@ -190,8 +122,8 @@ PYBIND11_MODULE(_core, m)
 {
     m.doc() = "NWQEC Python bindings";
 
-#if NWQEC_WITH_GRIDSYNTH_CPP
-    m.attr("WITH_GRIDSYNTH_CPP") = py::bool_(true);
+#ifdef NWQEC_WITH_GRIDSYNTH_CPP
+    m.attr("WITH_GRIDSYNTH_CPP") = py::bool_(NWQEC_WITH_GRIDSYNTH_CPP);
 #else
     m.attr("WITH_GRIDSYNTH_CPP") = py::bool_(false);
 #endif
@@ -293,7 +225,8 @@ PYBIND11_MODULE(_core, m)
                 c.add_operation(NWQEC::Operation(NWQEC::Operation::Type::Z_PAULI, {}, {}, {}, pop));
                 return c; }, py::arg("pauli"), "Apply rotation by π about the given Pauli string.")
         .def("num_qubits", &NWQEC::Circuit::get_num_qubits)
-        .def("count_ops", &NWQEC::Circuit::count_ops)
+    .def("count_ops", &NWQEC::Circuit::count_ops)
+    .def("is_clifford_t", &NWQEC::Circuit::is_clifford_t)
         .def("stats", &circuit_stats)
         .def("duration", &NWQEC::Circuit::duration, py::arg("code_distance"))
         .def("depth", &NWQEC::Circuit::depth)
@@ -327,28 +260,45 @@ PYBIND11_MODULE(_core, m)
 
     m.def(
         "to_pbc",
-        [](const NWQEC::Circuit &circuit, bool keep_cx, py::object epsilon)
+        [](const NWQEC::Circuit &circuit, bool keep_cx, bool optimize_t_count, py::object epsilon)
         {
             double eps_override = epsilon.is_none() ? -1.0 : epsilon.cast<double>();
-            return apply_transforms(circuit,
-                                    /*to_pbc=*/true,
-                                    /*to_clifford_reduction=*/false,
-                                    /*keep_cx=*/keep_cx,
-                                    /*t_pauli_opt=*/false,
-                                    /*remove_pauli=*/false,
-                                    /*keep_ccx=*/false,
-                                    /*silent=*/true,
-                                    /*epsilon_override=*/eps_override);
+            
+            // Use optimized PBC pipeline if T-optimization is requested
+            if (optimize_t_count) {
+                NWQEC::Transpiler transpiler;
+                NWQEC::PassConfig config;
+                config.keep_cx = keep_cx;
+                config.epsilon_override = eps_override;
+                config.silent = true;
+                
+                auto circuit_copy = std::make_unique<NWQEC::Circuit>(circuit);
+                auto passes = NWQEC::PassSequences::TO_PBC_OPTIMIZED;
+                
+                return transpiler.execute_passes(std::move(circuit_copy), passes, config);
+            } else {
+                return apply_transforms(circuit,
+                                        /*to_pbc=*/true,
+                                        /*to_clifford_reduction=*/false,
+                                        /*keep_cx=*/keep_cx,
+                                        /*t_pauli_opt=*/false,
+                                        /*remove_pauli=*/false,
+                                        /*keep_ccx=*/false,
+                                        /*silent=*/true,
+                                        /*epsilon_override=*/eps_override);
+            }
         },
         py::arg("circuit"),
         py::arg("keep_cx") = false,
+        py::arg("optimize_t_count") = false,
         py::arg("epsilon") = py::none(),
         "Transpile the input circuit to a Pauli-Based Circuit (PBC) form and return a new Circuit.\n"
         "- keep_cx: preserve CX gates where possible in the PBC form\n"
+        "- optimize_t_count: apply T-count optimization after PBC conversion\n"
         "- epsilon: optional absolute tolerance for RZ synthesis (applied to all angles)");
 
     m.def(
-        "to_taco",
+        "to_clifford_reduction",
         [](const NWQEC::Circuit &circuit, py::object epsilon)
         {
             double eps_override = epsilon.is_none() ? -1.0 : epsilon.cast<double>();
@@ -364,8 +314,11 @@ PYBIND11_MODULE(_core, m)
         },
         py::arg("circuit"),
         py::arg("epsilon") = py::none(),
-        "Apply the Clifford reduction (TACO) optimisation pipeline and return a new Circuit.\n"
+        "Apply the Clifford reduction optimization and return a new Circuit.\n"
+        "This optimization preserves circuit parallelism while reducing non-T overhead.\n"
+        "Based on the technique from: Wang et al. 'Optimizing FTQC Programs through QEC Transpiler and Architecture Codesign' (2024)\n"
         "- epsilon: optional absolute tolerance for RZ synthesis (applied to all angles)");
+
 
     // fuse_t: apply only the T-Pauli fusion stage within the PBC pipeline
     m.def(
