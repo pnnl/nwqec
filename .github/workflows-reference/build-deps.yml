@@ -1,0 +1,110 @@
+name: Build Dependency Binaries
+
+on:
+  # Disabled - kept for reference only
+  # workflow_dispatch:
+  # workflow_call:
+
+env:
+  GMP_VERSION: "6.3.0"
+  MPFR_VERSION: "4.2.2"
+
+jobs:
+  build-prebuilts:
+    name: Build GMP & MPFR (${{ matrix.artifact_suffix }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_suffix: linux-x86_64
+          - os: ubuntu-22.04-arm
+            artifact_suffix: linux-arm64
+          - os: macos-14
+            artifact_suffix: macos-arm64
+          - os: macos-13
+            artifact_suffix: macos-x86_64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libtool m4 texinfo pkg-config
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install automake libtool m4 pkg-config
+
+
+      - name: Build GMP and MPFR
+        shell: bash
+        env:
+          ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        run: |
+          set -euxo pipefail
+
+          JOBS=1
+          if command -v nproc >/dev/null 2>&1; then
+            JOBS=$(nproc)
+          elif command -v sysctl >/dev/null 2>&1; then
+            JOBS=$(sysctl -n hw.logicalcpu)
+          fi
+
+          ROOT_DIR="${PWD}/prebuilt"
+          INSTALL_PREFIX="${ROOT_DIR}/install"
+          SRC_DIR="${ROOT_DIR}/src"
+          ARTIFACT_DIR="${ROOT_DIR}/artifacts"
+          mkdir -p "${INSTALL_PREFIX}" "${SRC_DIR}" "${ARTIFACT_DIR}"
+
+          cd "${SRC_DIR}"
+
+          THIRD_PARTY_DIR="${GITHUB_WORKSPACE}/third_party"
+          GMP_ARCHIVE="${THIRD_PARTY_DIR}/gmp-${GMP_VERSION}.tar.xz"
+          MPFR_ARCHIVE="${THIRD_PARTY_DIR}/mpfr-${MPFR_VERSION}.tar.xz"
+
+          if [ ! -f "${GMP_ARCHIVE}" ]; then
+            echo "Missing GMP archive at ${GMP_ARCHIVE}" >&2
+            exit 1
+          fi
+
+          if [ ! -f "${MPFR_ARCHIVE}" ]; then
+            echo "Missing MPFR archive at ${MPFR_ARCHIVE}" >&2
+            exit 1
+          fi
+
+          COMMON_CFLAGS="-O2 -fPIC"
+          COMMON_CXXFLAGS="-O2 -fPIC"
+
+          tar -xf "${GMP_ARCHIVE}"
+          cd "gmp-${GMP_VERSION}"
+          CPPFLAGS="${CPPFLAGS:-}" CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" ./configure --prefix="${INSTALL_PREFIX}" --enable-static --disable-shared --with-pic
+          make CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" -j"${JOBS}"
+          make CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" install
+          cd ..
+
+          tar -xf "${MPFR_ARCHIVE}"
+          cd "mpfr-${MPFR_VERSION}"
+          export CPPFLAGS="-I${INSTALL_PREFIX}/include ${CPPFLAGS:-}"
+          export LDFLAGS="-L${INSTALL_PREFIX}/lib ${LDFLAGS:-}"
+          CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" ./configure --prefix="${INSTALL_PREFIX}" --with-gmp="${INSTALL_PREFIX}" --enable-static --disable-shared --with-pic
+          make CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" -j"${JOBS}"
+          make CFLAGS="${COMMON_CFLAGS}" CXXFLAGS="${COMMON_CXXFLAGS}" install
+          cd ..
+
+          BUNDLE_NAME="gmp-${GMP_VERSION}_mpfr-${MPFR_VERSION}_${ARTIFACT_SUFFIX}"
+          tar -C "${INSTALL_PREFIX}" -czf "${ARTIFACT_DIR}/${BUNDLE_NAME}.tar.gz" .
+
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gmp-mpfr-${{ matrix.artifact_suffix }}
+          path: prebuilt/artifacts
+          if-no-files-found: error
+          retention-days: 7

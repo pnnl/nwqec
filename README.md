@@ -6,36 +6,51 @@ NWQEC is a C++/Python toolkit for fault-tolerant quantum circuit transpilation. 
 - Parsing OpenQASM 2.0 circuits into an internal circuit representation.
 - Converting arbitrary circuits to Clifford+T using the gridsynth algorithm [1].
 - Producing Pauli-Based Circuits (PBC) with Tfuse optimisation for T-count reduction [2,3].
-- Applying the TACO (Clifford-reduction) pipeline [4], which preserves circuit parallelism while reducing non-T overhead.
+- Applying Clifford reduction optimization [4], which preserves circuit parallelism while reducing non-T overhead.
 - Leveraging a tableau-based IR for high-performance PBC passes [2].
 
 ## Requirements
-- Python 3.8+
+- Python 3.8+ (for PyPI installation)
+
+For building from source:
 - C++17 toolchain and CMake ≥ 3.16
 - Python build dependencies: `scikit-build-core`, `pybind11`
-- Recommended: GMP and MPFR for the C++ gridsynth backend
-- Fallback mode (optional): `pygridsynth` and `mpmath` when installing without GMP/MPFR
 
-## Installing GMP/MPFR
-- macOS (Homebrew): `brew install gmp mpfr`
-- Ubuntu/Debian: `sudo apt-get install -y libgmp-dev libmpfr-dev`
-- Fedora: `sudo dnf install gmp-devel mpfr-devel`
-- Windows (MSYS2): `pacman -S mingw-w64-x86_64-gmp mingw-w64-x86_64-mpfr`
+## Platform Support
+NWQEC relies on GMP and MPFR mathematical libraries and is currently supported on macOS and Linux with full C++ gridsynth backend functionality. The build system automatically downloads prebuilt GMP/MPFR binaries for these platforms.
 
-Note: With GMP and MPFR, the native C++ gridsynth backend can significantly accelerate Clifford+T synthesis (20× speed-up on an 18-qubit QFT benchmark).
+For Windows users, we recommend using WSL (Windows Subsystem for Linux).
 
-## Installing NWQEC
+The C++ gridsynth backend provides significant acceleration for Clifford+T synthesis (20× speed-up on an 18-qubit QFT benchmark).
+
+## Installation
+
+### Install from PyPI (Recommended)
+```bash
+pip install nwqec
+```
+
+### Build from Source
+For development or building custom wheels:
 ```bash
 pip install -U pip
 pip install scikit-build-core pybind11
 pip install .
 ```
-If GMP/MPFR are not available the build will stop with a highlighted message. Either install the libraries (see above) or opt into the Python fallback:
+
+### C++ Development
+For advanced users or performance-critical applications, NWQEC provides native C++ executables that offer direct access to the transpilation engine without Python overhead.
+
+Built executables:
+- `nwqec-cli`: Complete circuit transpilation pipeline with QASM I/O
+- `gridsynth`: High-precision single-angle synthesis (header-only C++ implementation)
+
 ```bash
-pip install . --config-settings=cmake.define.NWQEC_ALLOW_NO_GMP=ON
-pip install pygridsynth mpmath  # required for fallback RZ synthesis
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ```
-Install GMP/MPFR later and reinstall without the flag to restore the C++ gridsynth backend.
+
+Prebuilt GMP/MPFR binaries are automatically downloaded during the build process. See [C++ CLI guide](docs/cpp_cli.md) for details.
 
 
 ## Quick Start (Python)
@@ -55,10 +70,10 @@ pbc_opt = nwqec.fuse_t(pbc)
 print("T count before Tfuse:", pbc.count_ops().get("t_pauli", 0))
 print("T count after Tfuse:", pbc_opt.count_ops().get("t_pauli", 0))
 
-# Clifford reduction (TACO) pipeline
-taco = nwqec.to_taco(circuit)
-print(f"Depth reduction of TACO over Clifford+T: {clifford_t.depth() / taco.depth():.2f}x")
-print(f"Depth reduction of TACO over PBC: {pbc.depth() / taco.depth():.2f}x")
+# Clifford reduction optimization
+clifford_reduced = nwqec.to_clifford_reduction(circuit)
+print(f"Depth reduction over Clifford+T: {clifford_t.depth() / clifford_reduced.depth():.2f}x")
+print(f"Depth reduction over PBC: {pbc.depth() / clifford_reduced.depth():.2f}x")
 ```
 
 ## Further Documentation
@@ -68,7 +83,7 @@ print(f"Depth reduction of TACO over PBC: {pbc.depth() / taco.depth():.2f}x")
 ## Repository Layout
 - `include/nwqec/` — public headers (core, parser, passes, gridsynth, tableau)
 - `python/nwqec/` — Python package and pybind11 bindings
-- `tools/` — C++ command-line utilities (`transpiler`, `gridsynth`)
+- `tools/` — C++ command-line utilities (`nwqec-cli`, `gridsynth`)
 - `docs/` — additional documentation
 - `tests/` — Python tests
 

@@ -14,6 +14,10 @@
 #include <memory>
 #include <array>
 
+#if defined(_MSC_VER) && !defined(__clang__)
+#    include <intrin.h>
+#endif
+
 namespace NWQEC
 {
     class HTab
@@ -71,6 +75,15 @@ namespace NWQEC
 
             return stabs;
         }
+
+    static inline int popcount64(uint64_t value)
+    {
+#if defined(_MSC_VER) && !defined(__clang__)
+        return static_cast<int>(__popcnt64(static_cast<unsigned __int64>(value)));
+#else
+        return __builtin_popcountll(static_cast<unsigned long long>(value));
+#endif
+    }
 
         bool commutes_with_all(const PauliOp &pauli_op) const
         {
@@ -268,7 +281,7 @@ namespace NWQEC
                 // Ultra-fast path for ≤64 qubits - single popcount operation!
                 uint64_t anti_commute_word = (row1.get_x_bits_small() & row2.get_z_bits_small()) ^
                                              (row1.get_z_bits_small() & row2.get_x_bits_small());
-                return (__builtin_popcountll(anti_commute_word) & 1) == 0;
+                return (popcount64(anti_commute_word) & 1) == 0;
             }
             else
             {
@@ -286,8 +299,8 @@ namespace NWQEC
                     uint64_t ac2 = (row1.get_x_bits_large()[i + 2] & row2.get_z_bits_large()[i + 2]) ^ (row1.get_z_bits_large()[i + 2] & row2.get_x_bits_large()[i + 2]);
                     uint64_t ac3 = (row1.get_x_bits_large()[i + 3] & row2.get_z_bits_large()[i + 3]) ^ (row1.get_z_bits_large()[i + 3] & row2.get_x_bits_large()[i + 3]);
 
-                    anti_commuting_pairs += __builtin_popcountll(ac0) + __builtin_popcountll(ac1) +
-                                            __builtin_popcountll(ac2) + __builtin_popcountll(ac3);
+                    anti_commuting_pairs += popcount64(ac0) + popcount64(ac1) +
+                                            popcount64(ac2) + popcount64(ac3);
                 }
 
                 // Handle remaining words
@@ -295,7 +308,7 @@ namespace NWQEC
                 {
                     uint64_t anti_commute_word = (row1.get_x_bits_large()[i] & row2.get_z_bits_large()[i]) ^
                                                  (row1.get_z_bits_large()[i] & row2.get_x_bits_large()[i]);
-                    anti_commuting_pairs += __builtin_popcountll(anti_commute_word);
+                    anti_commuting_pairs += popcount64(anti_commute_word);
                 }
 
                 return (anti_commuting_pairs & 1) == 0;
