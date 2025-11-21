@@ -1,5 +1,5 @@
 #include "nwqec/parser/qasm_parser.hpp"
-#include "nwqec/core/pass_manager.hpp"
+#include "nwqec/core/transpiler.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -35,10 +35,10 @@ int main(int argc, char *argv[])
     std::string output_filename = "";
     bool to_pbc = false;
     bool to_clifford_reduction = false;
-    bool to_red_pbc = false;
     bool t_pauli_opt = false;
     bool remove_pauli = false;
     bool keep_ccx = false;
+    bool keep_cx = false;
 
     // Helper function to print usage
     auto print_usage = [&](bool detailed = false)
@@ -63,11 +63,11 @@ int main(int argc, char *argv[])
         std::cout << "" << std::endl;
 
         std::cout << "TRANSPILATION OPTIONS:" << std::endl;
-        std::cout << "  --pbc                 Enable Pauli Basis Compilation pass" << std::endl;
-        std::cout << "  --cr                  Enable Clifford Reduction pass" << std::endl;
-        std::cout << "  --red-pbc             Enable Restricted PBC pass" << std::endl;
-        std::cout << "  --t-opt               Enable T Pauli optimizer (requires --pbc)" << std::endl;
-        std::cout << "  --keep-ccx            Keep CCX gates (Toffoli, CSWAP, RCCX) without decomposition" << std::endl;
+        std::cout << "  --pbc                 Convert to Pauli-Based Circuit (PBC) format" << std::endl;
+        std::cout << "  --cr                  Apply Clifford Reduction optimization" << std::endl;
+        std::cout << "  --t-opt               Apply T-count optimization (works on PBC circuits)" << std::endl;
+        std::cout << "  --keep-ccx            Preserve CCX gates during Clifford+T conversion" << std::endl;
+        std::cout << "  --keep-cx             Preserve CX gates during PBC conversion" << std::endl;
         std::cout << "" << std::endl;
 
         std::cout << "ANALYSIS OPTIONS:" << std::endl;
@@ -76,33 +76,52 @@ int main(int argc, char *argv[])
 
         std::cout << "OUTPUT OPTIONS:" << std::endl;
         std::cout << "  --no-save             Don't save transpiled circuit to file" << std::endl;
-        std::cout << "  -o, --output <file>   Specify output filename for transpiled circuit" << std::endl;
+        std::cout << "  -o <file>             Specify output filename for transpiled circuit" << std::endl;
         std::cout << "" << std::endl;
 
         std::cout << "OTHER OPTIONS:" << std::endl;
-        std::cout << "  --help, -h            Show this help message" << std::endl;
+        std::cout << "  -h                    Show this help message" << std::endl;
 
         if (detailed)
         {
             std::cout << "" << std::endl;
             std::cout << "EXAMPLES:" << std::endl;
             std::cout << "  " << argv[0] << " circuit.qasm" << std::endl;
-            std::cout << "    Transpile circuit.qasm to Clifford+T" << std::endl;
+            std::cout << "    Convert to Clifford+T format" << std::endl;
             std::cout << "" << std::endl;
-            std::cout << "  " << argv[0] << " --pbc --t-opt circuit.qasm" << std::endl;
-            std::cout << "    Apply PBC pass with T optimization" << std::endl;
+            std::cout << "  " << argv[0] << " circuit.qasm --keep-ccx" << std::endl;
+            std::cout << "    Convert to Clifford+T while preserving CCX gates" << std::endl;
             std::cout << "" << std::endl;
-            std::cout << "  " << argv[0] << " --shor 4 --pbc --no-save" << std::endl;
-            std::cout << "    Generate Shor circuit, apply PBC, don't save output" << std::endl;
+            std::cout << "  " << argv[0] << " circuit.qasm --pbc" << std::endl;
+            std::cout << "    Convert to Pauli-Based Circuit format" << std::endl;
+            std::cout << "" << std::endl;
+            std::cout << "  " << argv[0] << " circuit.qasm --pbc --keep-cx" << std::endl;
+            std::cout << "    Convert to PBC while preserving CX gates" << std::endl;
+            std::cout << "" << std::endl;
+            std::cout << "  " << argv[0] << " circuit.qasm --pbc --t-opt" << std::endl;
+            std::cout << "    Convert to PBC and apply T-count optimization" << std::endl;
+            std::cout << "" << std::endl;
+            std::cout << "  " << argv[0] << " pbc_circuit.qasm --t-opt" << std::endl;
+            std::cout << "    Apply T-count optimization to existing PBC circuit" << std::endl;
+            std::cout << "" << std::endl;
+            std::cout << "  " << argv[0] << " circuit.qasm --cr" << std::endl;
+            std::cout << "    Apply Clifford Reduction optimization" << std::endl;
             std::cout << "" << std::endl;
             std::cout << "  " << argv[0] << " circuit.qasm -o my_output.qasm" << std::endl;
-            std::cout << "    Transpile circuit.qasm and save to my_output.qasm" << std::endl;
+            std::cout << "    Transpile and save to custom filename" << std::endl;
+            std::cout << "" << std::endl;
+            std::cout << "WORKFLOW:" << std::endl;
+            std::cout << "  1. Basic processing: decompose → remove trivial RZ → synthesize RZ" << std::endl;
+            std::cout << "  2. Choose format: Clifford+T (default), PBC, or Clifford Reduction" << std::endl;
+            std::cout << "  3. Optional: T-optimization (for PBC), cleanup passes" << std::endl;
             std::cout << "" << std::endl;
             std::cout << "NOTES:" << std::endl;
-            std::cout << "  - PBC, Clifford Reduction, and Restricted PBC passes are mutually exclusive" << std::endl;
-            std::cout << "  - T optimization (--t-opt) requires PBC pass (--pbc)" << std::endl;
-            std::cout << "  - Output files are saved with '_transpiled.qasm' suffix by default" << std::endl;
-            std::cout << "  - Use -o/--output to specify a custom output filename" << std::endl;
+            std::cout << "  - Format options (--pbc, --cr) are mutually exclusive" << std::endl;
+            std::cout << "  - T-optimization (--t-opt) works on PBC circuits (combine with --pbc or use alone)" << std::endl;
+            std::cout << "  - CCX preservation (--keep-ccx) applies to Clifford+T conversion" << std::endl;
+            std::cout << "  - CX preservation (--keep-cx) applies to PBC conversion" << std::endl;
+            std::cout << "  - Clifford Reduction (--cr) optimizes circuit depth while preserving parallelism" << std::endl;
+            std::cout << "  - Output files use '_transpiled.qasm' suffix by default" << std::endl;
         }
     };
 
@@ -120,7 +139,7 @@ int main(int argc, char *argv[])
         std::string arg = argv[arg_index];
 
         // Handle help first
-        if (arg == "--help" || arg == "-h")
+        if (arg == "-h")
         {
             print_usage(true);
             return 0;
@@ -198,12 +217,12 @@ int main(int argc, char *argv[])
             save_to_file = false;
             std::cout << "File saving disabled" << std::endl;
         }
-        else if (arg == "-o" || arg == "--output")
+        else if (arg == "-o")
         {
             if (arg_index + 1 >= argc)
             {
-                std::cout << "Error: " << arg << " requires output filename" << std::endl;
-                std::cout << "Usage: " << arg << " <filename>" << std::endl;
+                std::cout << "Error: -o requires output filename" << std::endl;
+                std::cout << "Usage: -o <filename>" << std::endl;
                 return 1;
             }
             arg_index++;
@@ -212,7 +231,7 @@ int main(int argc, char *argv[])
         }
         else if (arg == "--pbc")
         {
-            if (to_clifford_reduction || to_red_pbc)
+            if (to_clifford_reduction)
             {
                 std::cout << "Error: Cannot specify --pbc with other transpilation passes (mutually exclusive)" << std::endl;
                 return 1;
@@ -222,24 +241,13 @@ int main(int argc, char *argv[])
         }
         else if (arg == "--cr")
         {
-            if (to_pbc || to_red_pbc)
+            if (to_pbc)
             {
                 std::cout << "Error: Cannot specify --cr with other transpilation passes (mutually exclusive)" << std::endl;
                 return 1;
             }
             to_clifford_reduction = true;
             std::cout << "Clifford Reduction pass enabled" << std::endl;
-        }
-        else if (arg == "--red-pbc")
-        {
-            if (to_pbc || to_clifford_reduction)
-            {
-                std::cout << "Error: Cannot specify --red-pbc with other transpilation passes (mutually exclusive)" << std::endl;
-                return 1;
-            }
-            to_red_pbc = true;
-            keep_ccx = true; // Automatically set keep_ccx to true when red_pbc is enabled
-            std::cout << "Restricted PBC pass enabled (CCX gates will be preserved)" << std::endl;
         }
         else if (arg == "--t-opt")
         {
@@ -255,6 +263,11 @@ int main(int argc, char *argv[])
         {
             keep_ccx = true;
             std::cout << "CCX gate preservation enabled" << std::endl;
+        }
+        else if (arg == "--keep-cx")
+        {
+            keep_cx = true;
+            std::cout << "CX gate preservation enabled" << std::endl;
         }
         else if (arg[0] == '-')
         {
@@ -295,15 +308,17 @@ int main(int argc, char *argv[])
     {
         std::cout << "Error: No input specified" << std::endl;
         std::cout << "Please provide a QASM file, or use --qft or --shor to generate a test circuit" << std::endl;
-        std::cout << "Use --help for more information" << std::endl;
+        std::cout << "Use -h for more information" << std::endl;
         return 1;
     }
 
-    // Validate that T optimization is only used with PBC
-    if (t_pauli_opt && !to_pbc)
+    // T-optimization can be used alone (for existing PBC circuits) or with --pbc
+
+    // Validate that CX preservation is only used with PBC
+    if (keep_cx && !to_pbc)
     {
-        std::cout << "Error: T Pauli optimizer (--t-opt) requires PBC pass (--pbc)" << std::endl;
-        std::cout << "Please add --pbc flag when using --t-opt" << std::endl;
+        std::cout << "Error: CX gate preservation (--keep-cx) requires PBC pass (--pbc)" << std::endl;
+        std::cout << "Please add --pbc flag when using --keep-cx" << std::endl;
         return 1;
     }
 
@@ -329,8 +344,6 @@ int main(int argc, char *argv[])
             passes.push_back("PBC");
         if (to_clifford_reduction)
             passes.push_back("Clifford Reduction");
-        if (to_red_pbc)
-            passes.push_back("Restricted PBC");
         if (t_pauli_opt)
             passes.push_back("T Optimization");
         if (passes.empty())
@@ -344,10 +357,23 @@ int main(int argc, char *argv[])
         }
         std::cout << std::endl;
 
+        std::vector<std::string> options;
         if (remove_pauli)
-            std::cout << "Options: Remove Pauli gates from final circuit" << std::endl;
+            options.push_back("Remove Pauli gates from final circuit");
         if (keep_ccx)
-            std::cout << "Options: CCX gate preservation enabled" << std::endl;
+            options.push_back("CCX gate preservation enabled");
+        if (keep_cx)
+            options.push_back("CX gate preservation enabled");
+        
+        if (!options.empty()) {
+            std::cout << "Options: ";
+            for (size_t i = 0; i < options.size(); ++i) {
+                std::cout << options[i];
+                if (i < options.size() - 1)
+                    std::cout << ", ";
+            }
+            std::cout << std::endl;
+        }
         if (!save_to_file)
             std::cout << "Output: No file will be saved" << std::endl;
         else if (!output_filename.empty())
@@ -421,14 +447,44 @@ int main(int argc, char *argv[])
     auto start_transpile = std::chrono::high_resolution_clock::now();
     try
     {
-        NWQEC::PassManager pass_manager;
-        circuit = pass_manager.apply_passes(std::move(circuit), to_pbc, to_clifford_reduction, to_red_pbc, t_pauli_opt, remove_pauli, keep_ccx);
+        NWQEC::Transpiler transpiler;
+        NWQEC::PassConfig config;
+        config.keep_ccx = keep_ccx;
+        config.keep_cx = keep_cx;
+        config.silent = false;  // CLI always shows output
+        
+        // Choose the appropriate pass sequence based on the logical workflow
+        std::vector<NWQEC::PassType> passes;
+        
+        if (to_pbc && t_pauli_opt) {
+            // PBC with T-optimization: full pipeline
+            passes = NWQEC::PassSequences::TO_PBC_OPTIMIZED;
+        } else if (to_pbc) {
+            // PBC only
+            passes = NWQEC::PassSequences::TO_PBC;
+        } else if (to_clifford_reduction) {
+            // Clifford reduction optimization pipeline
+            passes = NWQEC::PassSequences::TO_CLIFFORD_REDUCTION;
+        } else if (t_pauli_opt) {
+            // T-optimization on existing PBC circuit
+            passes = NWQEC::PassSequences::T_OPTIMIZATION_ONLY;
+        } else {
+            // Default: Clifford+T conversion
+            passes = NWQEC::PassSequences::TO_CLIFFORD_T;
+        }
+        
+        // Add cleanup if requested
+        if (remove_pauli) {
+            passes.push_back(NWQEC::PassType::REMOVE_PAULI);
+        }
+        
+        circuit = transpiler.execute_passes(std::move(circuit), passes, config);
     }
     catch (const std::exception &e)
     {
         std::cerr << "Error during transpilation: " << e.what() << std::endl;
         std::cerr << "This may be due to:" << std::endl;
-        std::cerr << "  - Missing Python dependencies (pygridsynth, mpmath)" << std::endl;
+        
         std::cerr << "  - Invalid circuit structure" << std::endl;
         std::cerr << "  - Insufficient memory for large circuits" << std::endl;
         return 1;

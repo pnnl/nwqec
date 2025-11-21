@@ -1,13 +1,7 @@
-#ifndef NWQEC_WITH_GRIDSYNTH_CPP
-#define NWQEC_WITH_GRIDSYNTH_CPP 0
-#endif
-
 #pragma once
 
 #include "nwqec/core/circuit.hpp"
-#if NWQEC_WITH_GRIDSYNTH_CPP
 #include "nwqec/gridsynth/gridsynth.hpp"
-#endif
 #include "nwqec/core/constants.hpp"
 
 #include "pass_template.hpp"

@@ -7,19 +7,24 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "nwqec"
-version = "0.1.0"
+version = "0.1.1"
 description = "NWQEC: C++ quantum circuit transpiler with Python bindings"
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "Proprietary or project-specific" }
+license = { text = "MIT" }
 authors = [{ name = "NWQEC Authors" }]
 keywords = ["quantum", "transpiler", "circuits", "clifford", "t"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: C++",
-  "License :: Other/Proprietary License",
+  "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pnnl/nwqec"
+Repository = "https://github.com/pnnl/nwqec"
+Issues = "https://github.com/pnnl/nwqec/issues"
 
 [tool.scikit-build]
 cmake.minimum-version = "3.16"
@@ -31,4 +36,22 @@ logging.level = "INFO"
 
 [tool.scikit-build.cmake.define]
 NWQEC_BUILD_PYTHON = true
+
+[tool.cibuildwheel]
+# Build wheels for these platforms
+build = [
+  "cp38-*", "cp39-*", "cp310-*", "cp311-*", "cp312-*"
+]
+skip = [
+  "*-win*",            # Skip all Windows (not supported yet)
+  "*-musllinux_*",     # Skip musl Linux (Alpine)
+]
+
+# Platform-specific settings
+[tool.cibuildwheel.macos]
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
+
+# Test the built wheels
+test-command = "python -c 'import nwqec; print(\"Version:\", nwqec.__version__); print(\"WITH_GRIDSYNTH_CPP:\", nwqec.WITH_GRIDSYNTH_CPP)'"
+test-skip = "cp38-macosx_*:arm64"  # Skip Python 3.8 ARM64 testing (known cibuildwheel limitation)
 

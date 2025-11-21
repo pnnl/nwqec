@@ -1,24 +1,41 @@
-import os
 import importlib.util
+from pathlib import Path
 import pytest
 
 
+def _require_nwqec():
+    spec = importlib.util.find_spec("nwqec")
+    if spec is None:
+        pytest.skip("nwqec module not installed")
+    return spec
+
+
 def test_import_nwqec():
-    assert importlib.util.find_spec("nwqec") is not None
+    _require_nwqec()
 
 
-@pytest.mark.skipif(importlib.util.find_spec("nwqec") is None, reason="nwqec module not installed")
-def test_load_and_stats():
+def test_load_and_stats(tmp_path):
+    _require_nwqec()
     import nwqec
-    # Use a small benchmark file
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    qasm_path = os.path.join(repo_root, "example_circuits", "qft_n18.qasm")
-    assert os.path.exists(qasm_path)
 
-    c = nwqec.load_qasm(qasm_path)
-    # Basic sanity checks
-    assert c.num_qubits() > 0
-    s = c.stats()
-    assert "Circuit Statistics" in s
-    counts = c.count_ops()
+    repo_root = Path(__file__).resolve().parents[2]
+    qasm_path = repo_root / "tests" / "python" / "fixtures" / "fixture_circuit.qasm"
+    assert qasm_path.exists()
+
+    circuit = nwqec.load_qasm(str(qasm_path))
+    assert circuit.num_qubits() > 0
+    stats = circuit.stats()
+    assert "Circuit Statistics" in stats
+    counts = circuit.count_ops()
     assert isinstance(counts, dict)
+
+    clifford = nwqec.to_clifford_t(circuit, epsilon=1e-6)
+    assert clifford.is_clifford_t()
+
+    pbc = nwqec.to_pbc(circuit, epsilon=1e-6)
+    fused = nwqec.fuse_t(pbc)
+    assert fused.count_ops().get("t_pauli", 0) <= pbc.count_ops().get("t_pauli", 0)
+
+    out_file = tmp_path / "out.qasm"
+    clifford.to_qasm_file(str(out_file))
+    assert out_file.exists()

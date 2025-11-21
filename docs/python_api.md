@@ -6,8 +6,8 @@ The `nwqec` package exposes the core transpilation functionality to Python users
 Module Constants
 ----------------
 - `WITH_GRIDSYNTH_CPP: bool`
-  - `True` if the package was built with the C++ gridsynth backend (GMP/MPFR detected at build time).
-  - `False` if installed with `-DNWQEC_ALLOW_NO_GMP=ON`; RZ synthesis uses the Python fallback when available.
+  - `True` if the package was built with the C++ gridsynth backend using prebuilt GMP/MPFR libraries.
+  - Always `True` on supported platforms (macOS/Linux) as prebuilt binaries are automatically downloaded.
 - `__version__: str`
   - Package version string.
 
@@ -25,15 +25,18 @@ Keyword-only options must be supplied by name (see bullet lists). Each function 
   - `epsilon`: absolute error tolerance for RZ synthesis; defaults to `abs(theta) * DEFAULT_EPSILON_MULTIPLIER` per angle.
   - Produces a Clifford+T-only circuit.
 
-- **`to_pbc(circuit: Circuit, epsilon: float | None = None) -> Circuit`**
+- **`to_pbc(circuit: Circuit, keep_cx: bool = False, optimize_t_count: bool = False, epsilon: float | None = None) -> Circuit`**
   - `circuit`: source circuit.
+  - `keep_cx`: preserve CX gates where possible in the PBC form.
+  - `optimize_t_count`: apply T-count optimization after PBC conversion.
   - `epsilon`: absolute error tolerance for RZ synthesis.
   - Transpiles the circuit to a Pauli-Based Circuit (PBC).
 
-- **`to_taco(circuit: Circuit, epsilon: float | None = None) -> Circuit`**
+- **`to_clifford_reduction(circuit: Circuit, epsilon: float | None = None) -> Circuit`**
   - `circuit`: source circuit.
   - `epsilon`: absolute error tolerance for RZ synthesis.
-  - Runs the Clifford-reduction/TACO pipeline (parallel to PBC, preserves gate parallelism).
+  - Applies the Clifford reduction optimization (preserves parallelism while reducing non-T overhead).
+  - Based on the technique from Wang et al. "Optimizing FTQC Programs through QEC Transpiler and Architecture Codesign" (2024).
 
 - **`fuse_t(circuit: Circuit, epsilon: float | None = None) -> Circuit`**
   - `circuit`: source circuit, consisting exclusively of Pauli-based operations.
@@ -46,13 +49,13 @@ Create with `Circuit(num_qubits: int)`.
 
 ### Inspection
 - `num_qubits() -> int`
-- `num_bits() -> int`
 - `count_ops() -> dict[str, int]`
 - `depth() -> int`
 - `stats() -> str`
 - `duration(code_distance: float) -> float`
 - `to_qasm_str() -> str`
-- `to_qasm_file(path: str) -> None`
+- `save_qasm(path: str) -> None`
+- `to_qasm_file(filename: str) -> None`  # alias for save_qasm
 - `is_clifford_t() -> bool`
 
 ### Single-Qubit Gates
@@ -103,17 +106,27 @@ import nwqec
 c = nwqec.load_qasm("example_circuits/qft_n18.qasm")
 print(c.stats())
 
-# Clifford+T conversion
-ct = nwqec.to_clifford_t(c, epsilon=1e-10)
-print(ct.count_ops())
+# Clifford+T conversion (default)
+ct = nwqec.to_clifford_t(c, keep_ccx=False, epsilon=1e-10)
+print("Clifford+T gate counts:", ct.count_ops())
 
-# PBC + Tfuse
+# PBC conversion
+pbc = nwqec.to_pbc(c, keep_cx=False)
+print("PBC gate counts:", pbc.count_ops())
+
+# PBC with T-count optimization (single call)
+pbc_opt = nwqec.to_pbc(c, optimize_t_count=True)
+print("Optimized PBC gate counts:", pbc_opt.count_ops())
+
+# Alternative: PBC then T-optimization (two-step process)
 pbc = nwqec.to_pbc(c)
 pbc_opt = nwqec.fuse_t(pbc)
-print("T count after Tfuse:", pbc_opt.count_ops().get("T", 0))
-pbc_opt.save_qasm("example_circuits/qft_n18_transpiled.qasm")
+print("T count after separate Tfuse:", pbc_opt.count_ops().get("t_pauli", 0))
 
-# TACO pipeline
-taco = nwqec.to_taco(c)
-print("Gate counts after TACO:", taco.count_ops())
+# Clifford Reduction optimization
+clifford_reduced = nwqec.to_clifford_reduction(c)
+print("Clifford Reduction gate counts:", clifford_reduced.count_ops())
+
+# Save results
+pbc_opt.save_qasm("example_circuits/qft_n18_transpiled.qasm")
 ```

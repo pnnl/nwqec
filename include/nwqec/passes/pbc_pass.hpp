@@ -22,6 +22,25 @@ namespace NWQEC
 
         bool run(Circuit &circuit) override
         {
+            std::vector<Operation> operations = circuit.get_operations();
+            
+            // Check if circuit already contains PBC operations
+            bool has_pbc_operations = false;
+            for (const auto &op : operations) {
+                if (op.get_type() == Operation::Type::T_PAULI ||
+                    op.get_type() == Operation::Type::S_PAULI ||
+                    op.get_type() == Operation::Type::M_PAULI ||
+                    op.get_type() == Operation::Type::Z_PAULI) {
+                    has_pbc_operations = true;
+                    break;
+                }
+            }
+            
+            // If circuit already contains PBC operations, skip processing
+            if (has_pbc_operations) {
+                return false; // No modification needed
+            }
+            
             size_t n_qubits = circuit.get_num_qubits();
             size_t n_gate_stabs = 0;
             std::vector<Operation::Type> gate_types;
@@ -30,10 +49,6 @@ namespace NWQEC
             std::vector<uint8_t> phase_bits;
             std::vector<PauliOp> pbc_stabs;
             std::vector<bool> is_t_stab;
-
-            // Process the circuit
-
-            std::vector<Operation> operations = circuit.get_operations();
 
             // Process operations in reverse order - simpler approach without sequence optimization for now
             for (auto it = operations.rbegin(); it != operations.rend(); ++it)
