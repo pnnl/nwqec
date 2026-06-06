@@ -7,6 +7,7 @@
 #include <fstream>
 #include <cmath>
 #include <iomanip>
+#include <stdexcept>
 
 #include "nwqec/parser/qasm_parser.hpp"
 #include "nwqec/core/operation.hpp"
@@ -74,6 +75,33 @@ namespace
         return false;
     }
 
+    NWQEC::RzErrorPolicy parse_rz_err_policy(const std::string &rz_err)
+    {
+        if (rz_err == "per-gate")
+            return NWQEC::RzErrorPolicy::PER_GATE;
+        if (rz_err == "total")
+            return NWQEC::RzErrorPolicy::TOTAL;
+        if (rz_err == "relative")
+            return NWQEC::RzErrorPolicy::RELATIVE;
+
+        throw std::invalid_argument("rz_err must be one of: per-gate, total, relative");
+    }
+
+    void configure_rz_error(NWQEC::PassConfig &config, const std::string &rz_err, py::object epsilon)
+    {
+        config.rz_error_policy = parse_rz_err_policy(rz_err);
+        double resolved_epsilon = epsilon.is_none()
+                                      ? NWQEC::default_rz_error_epsilon(config.rz_error_policy)
+                                      : epsilon.cast<double>();
+
+        if (!(resolved_epsilon > 0.0) || !std::isfinite(resolved_epsilon))
+        {
+            throw std::invalid_argument("epsilon must be a positive finite number");
+        }
+
+        config.rz_error_epsilon = resolved_epsilon;
+    }
+
     // Helper to run transforms using the Transpiler
     std::unique_ptr<NWQEC::Circuit> apply_transforms(const NWQEC::Circuit &circuit,
                                                      bool to_pbc,
@@ -83,14 +111,15 @@ namespace
                                                      bool remove_pauli,
                                                      bool keep_ccx,
                                                      bool silent,
-                                                     double epsilon_override = -1.0)
+                                                     const std::string &rz_err,
+                                                     py::object epsilon)
     {
         NWQEC::Transpiler transpiler;
         NWQEC::PassConfig config;
         config.keep_ccx = keep_ccx;
         config.keep_cx = keep_cx;
-        config.epsilon_override = epsilon_override;
         config.silent = silent;
+        configure_rz_error(config, rz_err, epsilon);
         
         auto circuit_copy = std::make_unique<NWQEC::Circuit>(circuit);
         
@@ -238,9 +267,8 @@ PYBIND11_MODULE(_core, m)
     // Module-level transforms: clean entrypoints
     m.def(
         "to_clifford_t",
-        [](const NWQEC::Circuit &circuit, bool keep_ccx, py::object epsilon)
+        [](const NWQEC::Circuit &circuit, bool keep_ccx, const std::string &rz_err, py::object epsilon)
         {
-            double eps_override = epsilon.is_none() ? -1.0 : epsilon.cast<double>();
             return apply_transforms(circuit,
                                     /*to_pbc=*/false,
                                     /*to_clifford_reduction=*/false,
@@ -249,28 +277,29 @@ PYBIND11_MODULE(_core, m)
                                     /*remove_pauli=*/false,
                                     /*keep_ccx=*/keep_ccx,
                                     /*silent=*/true,
-                                    /*epsilon_override=*/eps_override);
+                                    rz_err,
+                                    epsilon);
         },
         py::arg("circuit"),
         py::arg("keep_ccx") = false,
+        py::arg("rz_err") = "per-gate",
         py::arg("epsilon") = py::none(),
         "Convert the input circuit to a Clifford+T-only circuit and return a new Circuit.\n"
         "- keep_ccx: preserve CCX gates during decomposition\n"
-        "- epsilon: optional absolute tolerance for RZ synthesis (applied to all angles)");
+        "- rz_err: RZ synthesis error policy: 'per-gate', 'total', or 'relative'\n"
+        "- epsilon: optional value for the selected RZ error policy");
 
     m.def(
         "to_pbc",
-        [](const NWQEC::Circuit &circuit, bool keep_cx, bool optimize_t_count, py::object epsilon)
+        [](const NWQEC::Circuit &circuit, bool keep_cx, bool optimize_t_count, const std::string &rz_err, py::object epsilon)
         {
-            double eps_override = epsilon.is_none() ? -1.0 : epsilon.cast<double>();
-            
             // Use optimized PBC pipeline if T-optimization is requested
             if (optimize_t_count) {
                 NWQEC::Transpiler transpiler;
                 NWQEC::PassConfig config;
                 config.keep_cx = keep_cx;
-                config.epsilon_override = eps_override;
                 config.silent = true;
+                configure_rz_error(config, rz_err, epsilon);
                 
                 auto circuit_copy = std::make_unique<NWQEC::Circuit>(circuit);
                 auto passes = NWQEC::PassSequences::TO_PBC_OPTIMIZED;
@@ -285,23 +314,25 @@ PYBIND11_MODULE(_core, m)
                                         /*remove_pauli=*/false,
                                         /*keep_ccx=*/false,
                                         /*silent=*/true,
-                                        /*epsilon_override=*/eps_override);
+                                        rz_err,
+                                        epsilon);
             }
         },
         py::arg("circuit"),
         py::arg("keep_cx") = false,
         py::arg("optimize_t_count") = false,
+        py::arg("rz_err") = "per-gate",
         py::arg("epsilon") = py::none(),
         "Transpile the input circuit to a Pauli-Based Circuit (PBC) form and return a new Circuit.\n"
         "- keep_cx: preserve CX gates where possible in the PBC form\n"
         "- optimize_t_count: apply T-count optimization after PBC conversion\n"
-        "- epsilon: optional absolute tolerance for RZ synthesis (applied to all angles)");
+        "- rz_err: RZ synthesis error policy: 'per-gate', 'total', or 'relative'\n"
+        "- epsilon: optional value for the selected RZ error policy");
 
     m.def(
         "to_clifford_reduction",
-        [](const NWQEC::Circuit &circuit, py::object epsilon)
+        [](const NWQEC::Circuit &circuit, const std::string &rz_err, py::object epsilon)
         {
-            double eps_override = epsilon.is_none() ? -1.0 : epsilon.cast<double>();
             return apply_transforms(circuit,
                                     /*to_pbc=*/false,
                                     /*to_clifford_reduction=*/true,
@@ -310,22 +341,24 @@ PYBIND11_MODULE(_core, m)
                                     /*remove_pauli=*/false,
                                     /*keep_ccx=*/false,
                                     /*silent=*/true,
-                                    /*epsilon_override=*/eps_override);
+                                    rz_err,
+                                    epsilon);
         },
         py::arg("circuit"),
+        py::arg("rz_err") = "per-gate",
         py::arg("epsilon") = py::none(),
         "Apply the Clifford reduction optimization and return a new Circuit.\n"
         "This optimization preserves circuit parallelism while reducing non-T overhead.\n"
         "Based on the technique from: Wang et al. 'Optimizing FTQC Programs through QEC Transpiler and Architecture Codesign' (2024)\n"
-        "- epsilon: optional absolute tolerance for RZ synthesis (applied to all angles)");
+        "- rz_err: RZ synthesis error policy: 'per-gate', 'total', or 'relative'\n"
+        "- epsilon: optional value for the selected RZ error policy");
 
 
     // fuse_t: apply only the T-Pauli fusion stage within the PBC pipeline
     m.def(
         "fuse_t",
-        [](const NWQEC::Circuit &circuit, py::object epsilon)
+        [](const NWQEC::Circuit &circuit, const std::string &rz_err, py::object epsilon)
         {
-            double eps_override = epsilon.is_none() ? -1.0 : epsilon.cast<double>();
             return apply_transforms(circuit,
                                     /*to_pbc=*/false,
                                     /*to_clifford_reduction=*/false,
@@ -334,12 +367,15 @@ PYBIND11_MODULE(_core, m)
                                     /*remove_pauli=*/false,
                                     /*keep_ccx=*/false,
                                     /*silent=*/true,
-                                    /*epsilon_override=*/eps_override);
+                                    rz_err,
+                                    epsilon);
         },
         py::arg("circuit"),
+        py::arg("rz_err") = "per-gate",
         py::arg("epsilon") = py::none(),
         "Optimize the number of T rotations within a Pauli-Based Circuit (PBC) and return a new Circuit.\n"
-        "- epsilon: optional absolute tolerance for any RZ synthesis still required");
+        "- rz_err: RZ synthesis error policy: 'per-gate', 'total', or 'relative'\n"
+        "- epsilon: optional value for any RZ synthesis still required");
 
     m.def("load_qasm", [](const std::string &filename)
           {

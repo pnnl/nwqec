@@ -7,7 +7,6 @@
 #include "pass_template.hpp"
 #include <vector>
 #include <cmath>
-#include <chrono>
 #include <numeric>
 #include <algorithm>
 #include <iomanip>
@@ -26,12 +25,14 @@ namespace NWQEC
     class SynthesizeRzPass : public Pass
     {
     private:
-        const double synthesis_error_ = NWQEC::DEFAULT_EPSILON_MULTIPLIER; // Default synthesis error tolerance multiplier
-        double epsilon_override_ = -1.0;                                   // If >=0, use this epsilon for all angles
+        RzErrorPolicy rz_error_policy_ = DEFAULT_RZ_ERROR_POLICY;
+        double rz_error_epsilon_ = DEFAULT_RZ_PER_GATE_EPSILON;
+        size_t rz_occurrence_count_ = 0;
 
     public:
         SynthesizeRzPass() = default;
-        explicit SynthesizeRzPass(double epsilon_override) : epsilon_override_(epsilon_override) {}
+        SynthesizeRzPass(RzErrorPolicy policy, double epsilon)
+            : rz_error_policy_(policy), rz_error_epsilon_(epsilon) {}
 
         std::string get_name() const override
         {
@@ -50,6 +51,7 @@ namespace NWQEC
 
             // Ensure RZ angle grouping is done
             ensure_rz_angle_grouping(circuit);
+            rz_occurrence_count_ = count_rz_occurrences(circuit);
 
             // Pre-synthesize all distinct RZ angles
             auto pre_synthesized_gates = synthesize_all_angles(circuit.distinct_rz_angles);
@@ -143,6 +145,17 @@ namespace NWQEC
             return synthesized_gates;
         }
 
+        size_t count_rz_occurrences(const Circuit &circuit) const
+        {
+            return static_cast<size_t>(std::count_if(
+                circuit.get_operations().begin(),
+                circuit.get_operations().end(),
+                [](const Operation &operation)
+                {
+                    return operation.get_type() == Operation::Type::RZ;
+                }));
+        }
+
         /**
          * @brief Synthesize a single RZ operation
          */
@@ -199,8 +212,7 @@ namespace NWQEC
             try
             {
                 std::string theta = std::to_string(angle);
-                // Choose epsilon: explicit override or default multiplier rule
-                double epsilon_abs = (epsilon_override_ >= 0.0) ? epsilon_override_ : synthesis_error_ * std::abs(angle);
+                double epsilon_abs = resolve_epsilon(angle);
                 // Call the gridsynth function with epsilon in scientific notation to avoid truncation
                 std::ostringstream eps_ss;
                 eps_ss.setf(std::ios::scientific);
@@ -210,6 +222,23 @@ namespace NWQEC
             catch (const std::exception &e)
             {
                 throw std::runtime_error("Failed to synthesize RZ angle " + std::to_string(angle) + ": " + e.what());
+            }
+        }
+
+        double resolve_epsilon(double angle) const
+        {
+            switch (rz_error_policy_)
+            {
+            case RzErrorPolicy::PER_GATE:
+                return rz_error_epsilon_;
+            case RzErrorPolicy::TOTAL:
+                if (rz_occurrence_count_ == 0)
+                    return rz_error_epsilon_;
+                return rz_error_epsilon_ / static_cast<double>(rz_occurrence_count_);
+            case RzErrorPolicy::RELATIVE:
+                return std::abs(angle) * rz_error_epsilon_;
+            default:
+                throw std::runtime_error("Unknown RZ error policy");
             }
         }
 

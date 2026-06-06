@@ -11,10 +11,10 @@
 #include <set>
 #include <string>
 #include <algorithm>
+#include <iterator>
 
 namespace NWQEC
 {
-    // PauliOp is now directly available from core/pauli_op.hpp
     class TfusePass : public Pass
     {
     private:
@@ -54,7 +54,10 @@ namespace NWQEC
                 optimized_rows = optimize(final_t_rows);
 
                 final_t_rows = std::move(optimized_rows.first);
-                final_s_rows.insert(final_s_rows.end(), optimized_rows.second.begin(), optimized_rows.second.end());
+                final_s_rows.reserve(final_s_rows.size() + optimized_rows.second.size());
+                final_s_rows.insert(final_s_rows.end(),
+                                    std::make_move_iterator(optimized_rows.second.begin()),
+                                    std::make_move_iterator(optimized_rows.second.end()));
 
                 if (optimized_rows.second.empty()) // No more S-Pauli rows produced
                     break;
@@ -97,20 +100,17 @@ namespace NWQEC
             std::vector<PauliOp> m_pauli_rows;
 
             t_pauli_rows.reserve(operations.size());
+            m_pauli_rows.reserve(num_qubits_);
 
             for (auto it = operations.rbegin(); it != operations.rend(); ++it)
             {
                 if (it->get_type() == Operation::Type::T_PAULI)
                 {
-                    PauliOp row(num_qubits_);
-                    row.from_string(it->get_pauli_string());
-                    t_pauli_rows.push_back(row);
+                    t_pauli_rows.push_back(it->get_pauli_op());
                 }
                 else if (it->get_type() == Operation::Type::M_PAULI)
                 {
-                    PauliOp row(num_qubits_);
-                    row.from_string(it->get_pauli_string());
-                    m_pauli_rows.push_back(row);
+                    m_pauli_rows.push_back(it->get_pauli_op());
                 }
                 else
                 {
@@ -180,32 +180,30 @@ namespace NWQEC
             std::vector<HTab> layers = create_layers(t_pauli_rows);
 
             std::vector<PauliOp> result_s_rows;
+            result_s_rows.reserve(t_pauli_rows.size() / 2);
 
             HTab result_tab(num_qubits_);
+            result_tab.enable_row_index();
 
             for (auto &layer : layers)
             {
                 layer.apply_reduction();
                 auto rows = layer.get_rows();
 
-                std::vector<PauliOp> cur_layer_t_rows;
-
                 for (const auto &row : rows)
                 {
                     if (row.get_rowtype() == NWQEC::RowType::S)
                     {
                         result_tab.front_multiply_pauli(row);
-
                         result_s_rows.push_back(row);
-                    }
-                    else
-                    {
-                        cur_layer_t_rows.push_back(row);
                     }
                 }
 
-                for (const auto &row : cur_layer_t_rows)
+                for (const auto &row : rows)
                 {
+                    if (row.get_rowtype() == NWQEC::RowType::S)
+                        continue;
+
                     result_tab.add_stab(row);
                 }
             }

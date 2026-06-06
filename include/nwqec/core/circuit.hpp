@@ -161,6 +161,11 @@ namespace NWQEC
         }
 
         // Add operations to the circuit
+        void reserve_operations(size_t count)
+        {
+            operations.reserve(count);
+        }
+
         virtual void add_operation(Operation operation)
         {
             // Update num_qubits and num_bits if new operation extends the circuit
@@ -292,25 +297,27 @@ namespace NWQEC
          */
         size_t depth() const
         {
-            std::unordered_map<size_t, size_t> depth_counts; // track depth of each qubit
+            std::vector<size_t> depth_counts(num_qubits, 0); // track depth of each qubit
 
-            for (size_t i = 0; i < operations.size(); ++i)
+            for (const auto &operation : operations)
             {
-                auto qubits = operations[i].get_qubits();
+                const auto &qubits = operation.get_qubits();
                 size_t current_depth = 0;
 
                 for (size_t qubit : qubits)
                 {
-                    current_depth = std::max(depth_counts[qubit], current_depth);
+                    if (qubit < depth_counts.size())
+                        current_depth = std::max(depth_counts[qubit], current_depth);
                 }
                 for (size_t qubit : qubits)
                 {
-                    depth_counts[qubit] = current_depth + 1;
+                    if (qubit < depth_counts.size())
+                        depth_counts[qubit] = current_depth + 1;
                 }
             }
 
             size_t max_depth = 0;
-            for (const auto &[qubit, depth] : depth_counts)
+            for (size_t depth : depth_counts)
             {
                 max_depth = std::max(max_depth, depth);
             }
@@ -352,29 +359,31 @@ namespace NWQEC
          */
         double duration(double code_distance) const
         {
-            std::unordered_map<size_t, double> duration_counts; // track duration of each qubit
+            std::vector<double> duration_counts(num_qubits, 0.0); // track duration of each qubit
 
-            for (size_t i = 0; i < operations.size(); ++i)
+            for (const auto &operation : operations)
             {
-                auto qubits = operations[i].get_qubits();
+                const auto &qubits = operation.get_qubits();
 
                 // Get gate duration based on type
-                double gate_duration = get_gate_duration(operations[i].get_type(), code_distance);
+                double gate_duration = get_gate_duration(operation.get_type(), code_distance);
 
                 double current_duration = 0.0;
 
                 for (size_t qubit : qubits)
                 {
-                    current_duration = std::max(duration_counts[qubit], current_duration);
+                    if (qubit < duration_counts.size())
+                        current_duration = std::max(duration_counts[qubit], current_duration);
                 }
                 for (size_t qubit : qubits)
                 {
-                    duration_counts[qubit] = current_duration + gate_duration;
+                    if (qubit < duration_counts.size())
+                        duration_counts[qubit] = current_duration + gate_duration;
                 }
             }
 
             double max_duration = 0.0;
-            for (const auto &[qubit, duration] : duration_counts)
+            for (double duration : duration_counts)
             {
                 max_duration = std::max(max_duration, duration);
             }

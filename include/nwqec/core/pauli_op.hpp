@@ -7,8 +7,23 @@
 #include <iostream>
 #include <iomanip>
 
+#if defined(_MSC_VER) && !defined(__clang__)
+#    include <intrin.h>
+#endif
+
 namespace NWQEC
 {
+    inline int pauli_op_ctz64(uint64_t value)
+    {
+#if defined(_MSC_VER) && !defined(__clang__)
+        unsigned long index = 0;
+        _BitScanForward64(&index, static_cast<unsigned __int64>(value));
+        return static_cast<int>(index);
+#else
+        return __builtin_ctzll(static_cast<unsigned long long>(value));
+#endif
+    }
+
     enum class RowType
     {
         T,
@@ -249,20 +264,28 @@ namespace NWQEC
             
             if (is_small_circuit)
             {
-                for (size_t i = 0; i < num_qubits; ++i)
+                uint64_t bits = x_bits_small;
+                while (bits)
                 {
-                    if (x_bits_small & (1ULL << i))
-                        indices.push_back(i);
+                    int bit = pauli_op_ctz64(bits);
+                    if (static_cast<size_t>(bit) < num_qubits)
+                        indices.push_back(static_cast<size_t>(bit));
+                    bits &= bits - 1;
                 }
             }
             else
             {
-                for (size_t i = 0; i < num_qubits; ++i)
+                for (size_t word_idx = 0; word_idx < x_bits_large.size(); ++word_idx)
                 {
-                    size_t word_idx = i / 64;
-                    size_t bit_idx = i % 64;
-                    if (x_bits_large[word_idx] & (1ULL << bit_idx))
-                        indices.push_back(i);
+                    uint64_t bits = x_bits_large[word_idx];
+                    while (bits)
+                    {
+                        int bit = pauli_op_ctz64(bits);
+                        size_t qubit = word_idx * 64 + static_cast<size_t>(bit);
+                        if (qubit < num_qubits)
+                            indices.push_back(qubit);
+                        bits &= bits - 1;
+                    }
                 }
             }
             
@@ -275,20 +298,28 @@ namespace NWQEC
             
             if (is_small_circuit)
             {
-                for (size_t i = 0; i < num_qubits; ++i)
+                uint64_t bits = z_bits_small;
+                while (bits)
                 {
-                    if (z_bits_small & (1ULL << i))
-                        indices.push_back(i);
+                    int bit = pauli_op_ctz64(bits);
+                    if (static_cast<size_t>(bit) < num_qubits)
+                        indices.push_back(static_cast<size_t>(bit));
+                    bits &= bits - 1;
                 }
             }
             else
             {
-                for (size_t i = 0; i < num_qubits; ++i)
+                for (size_t word_idx = 0; word_idx < z_bits_large.size(); ++word_idx)
                 {
-                    size_t word_idx = i / 64;
-                    size_t bit_idx = i % 64;
-                    if (z_bits_large[word_idx] & (1ULL << bit_idx))
-                        indices.push_back(i);
+                    uint64_t bits = z_bits_large[word_idx];
+                    while (bits)
+                    {
+                        int bit = pauli_op_ctz64(bits);
+                        size_t qubit = word_idx * 64 + static_cast<size_t>(bit);
+                        if (qubit < num_qubits)
+                            indices.push_back(qubit);
+                        bits &= bits - 1;
+                    }
                 }
             }
             

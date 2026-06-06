@@ -13,6 +13,12 @@
 
 namespace NWQEC
 {
+#if defined(_MSC_VER) && !defined(__clang__)
+#    define NWQEC_RESTRICT __restrict
+#else
+#    define NWQEC_RESTRICT __restrict__
+#endif
+
     using packed_t = uint64_t;
     constexpr size_t packed_size = sizeof(packed_t) * 8;
     constexpr packed_t MAX_PACKED = static_cast<packed_t>(~0);
@@ -44,51 +50,101 @@ namespace NWQEC
     class VTab
     {
     public:
-        // Constructor with gates and parameters
-        VTab(size_t n_qubits, size_t n_gate_stabs,
-             const std::vector<Operation::Type> &gates = {},
-             const std::vector<size_t> &qa = {},
-             const std::vector<size_t> &qb = {},
-             const std::vector<uint8_t> &phases = {},
-             const std::vector<PauliOp> &stab_rows = {})
+        VTab(size_t n_qubits, size_t n_gate_stabs)
             : n_qubits(n_qubits)
         {
-            str_len = static_cast<int>(n_qubits + 1);
-            assert(gates.size() == qa.size() && gates.size() == qb.size() && phases.size() == gates.size());
-
             init_structure(n_qubits + n_gate_stabs);
             init_identity();
-            process_gates(gates, qa, qb, phases, stab_rows);
         }
 
         size_t num_qubits() const { return n_qubits; }
         size_t num_rows() const { return local_rows; }
+
+        void apply_clifford_gate(Operation::Type gate, size_t a, size_t b = SIZE_MAX)
+        {
+            apply_gate(gate, a, b);
+        }
 
         void add_t_stab(size_t qubit, uint8_t phase)
         {
             if (local_rows % packed_size == 0)
                 cur_elements++;
             size_t bit_pos = local_rows % packed_size;
-            Utils::set_bit(r, cur_elements - 1, bit_pos, phase != 0);
-            Utils::set_bit(z[qubit], cur_elements - 1, bit_pos, true);
+            packed_t bit_mask = static_cast<packed_t>(1) << bit_pos;
+            if (phase != 0)
+                r[cur_elements - 1] |= bit_mask;
+            z_data[qubit * elements_per_qubit + cur_elements - 1] |= bit_mask;
             local_rows++;
         }
 
         void add_stab(const PauliOp &row)
         {
+            if (row.is_small())
+            {
+                add_stab_bits(row.get_x_bits_small(), row.get_z_bits_small(), row.r());
+                return;
+            }
+
             if (local_rows % packed_size == 0)
                 cur_elements++;
             size_t bit_pos = local_rows % packed_size;
-            Utils::set_bit(r, cur_elements - 1, bit_pos, row.r());
+            packed_t row_mask = static_cast<packed_t>(1) << bit_pos;
 
-            // Only set bits for non-zero entries (sparse representation)
+            if (row.r())
+                r[cur_elements - 1] |= row_mask;
+
             for (size_t qubit : row.x_indices())
-            {
-                Utils::set_bit(x[qubit], cur_elements - 1, bit_pos, true);
-            }
+                x_data[qubit * elements_per_qubit + cur_elements - 1] |= row_mask;
             for (size_t qubit : row.z_indices())
+                z_data[qubit * elements_per_qubit + cur_elements - 1] |= row_mask;
+
+            local_rows++;
+        }
+
+        void add_ccx_stabs(size_t q0, size_t q1, size_t q2)
+        {
+            if (n_qubits > 64)
             {
-                Utils::set_bit(z[qubit], cur_elements - 1, bit_pos, true);
+                auto ccx_rows = PauliOp::create_ccx_ops(q0, q1, q2, n_qubits);
+                for (const auto &stab : ccx_rows)
+                    add_stab(stab);
+                return;
+            }
+
+            const packed_t z0 = static_cast<packed_t>(1) << q0;
+            const packed_t z1 = static_cast<packed_t>(1) << q1;
+            const packed_t x2 = static_cast<packed_t>(1) << q2;
+
+            add_stab_bits(x2, 0, false);
+            add_stab_bits(0, z0 | z1, true);
+            add_stab_bits(0, z0, false);
+            add_stab_bits(x2, z0, true);
+            add_stab_bits(0, z1, false);
+            add_stab_bits(x2, z0 | z1, false);
+            add_stab_bits(x2, z1, true);
+        }
+
+        void add_stab_bits(packed_t x_bits, packed_t z_bits, bool phase)
+        {
+            if (local_rows % packed_size == 0)
+                cur_elements++;
+            size_t bit_pos = local_rows % packed_size;
+            packed_t row_mask = static_cast<packed_t>(1) << bit_pos;
+
+            if (phase)
+                r[cur_elements - 1] |= row_mask;
+
+            while (x_bits)
+            {
+                int bit = pauli_op_ctz64(x_bits);
+                x_data[static_cast<size_t>(bit) * elements_per_qubit + cur_elements - 1] |= row_mask;
+                x_bits &= x_bits - 1;
+            }
+            while (z_bits)
+            {
+                int bit = pauli_op_ctz64(z_bits);
+                z_data[static_cast<size_t>(bit) * elements_per_qubit + cur_elements - 1] |= row_mask;
+                z_bits &= z_bits - 1;
             }
             local_rows++;
         }
@@ -110,9 +166,9 @@ namespace NWQEC
                     // Build sparse representation by checking each qubit
                     for (size_t k = 0; k < n_qubits; k++)
                     {
-                        if (Utils::get_bit(x[k], i, j))
+                        if ((x_data[k * elements_per_qubit + i] & (static_cast<packed_t>(1) << j)) != 0)
                             row.add_x(k);
-                        if (Utils::get_bit(z[k], i, j))
+                        if ((z_data[k * elements_per_qubit + i] & (static_cast<packed_t>(1) << j)) != 0)
                             row.add_z(k);
                     }
                     stabs.push_back(row);
@@ -121,67 +177,17 @@ namespace NWQEC
             return stabs;
         }
 
-        void apply_s_from_start(const std::vector<size_t> &qubits)
-        {
-            size_t start_element = start_row_index / packed_size;
-
-            for (size_t q : qubits)
-            {
-                if (q < n_qubits)
-                {
-                    for (size_t i = start_element; i < cur_elements; i++)
-                    {
-                        r[i] ^= (x[q][i] & z[q][i]);
-                        z[q][i] ^= x[q][i];
-                    }
-                }
-            }
-        }
-
-        PauliOp pop_front()
-        {
-            if (is_empty())
-                return PauliOp(n_qubits);
-
-            size_t elem = start_row_index / packed_size;
-            size_t bit = start_row_index % packed_size;
-
-            PauliOp row(n_qubits);
-            row.set_r(Utils::get_bit(r, elem, bit));
-
-            for (size_t k = 0; k < n_qubits; k++)
-            {
-                if (Utils::get_bit(x[k], elem, bit))
-                    row.add_x(k);
-                if (Utils::get_bit(z[k], elem, bit))
-                    row.add_z(k);
-            }
-
-            start_row_index++;
-            return row;
-        }
-
-        bool is_empty() const
-        {
-            return start_row_index >= local_rows;
-        }
-
-        size_t remaining_rows() const
-        {
-            return is_empty() ? 0 : local_rows - start_row_index;
-        }
-
     private:
         void init_structure(size_t total_rows)
         {
             size_t elements = Utils::calc_elements(total_rows);
 
-            x.resize(n_qubits, std::vector<packed_t>(elements, 0));
-            z.resize(n_qubits, std::vector<packed_t>(elements, 0));
+            elements_per_qubit = elements;
+            x_data.assign(n_qubits * elements_per_qubit, 0);
+            z_data.assign(n_qubits * elements_per_qubit, 0);
             r.resize(elements, 0);
             local_rows = 0;
             cur_elements = 0;
-            start_row_index = 0;
         }
 
         void init_identity()
@@ -190,33 +196,10 @@ namespace NWQEC
             {
                 size_t elem = local_rows / packed_size;
                 size_t bit = local_rows % packed_size;
-                Utils::set_bit(z[i], elem, bit, true);
+                z_data[i * elements_per_qubit + elem] |= (static_cast<packed_t>(1) << bit);
                 local_rows++;
             }
             cur_elements = Utils::calc_elements(local_rows);
-            next_rank = 0;
-        }
-
-        void process_gates(const std::vector<Operation::Type> &gates,
-                           const std::vector<size_t> &qa,
-                           const std::vector<size_t> &qb,
-                           const std::vector<uint8_t> &phases,
-                           const std::vector<PauliOp> &stab_rows = {})
-        {
-            size_t stab_idx = 0;
-            for (size_t i = 0; i < gates.size(); i++)
-            {
-                if (gates[i] == Operation::Type::T || gates[i] == Operation::Type::TDG)
-                    add_t_stab(qa[i], phases[i]);
-                else if (gates[i] == Operation::Type::T_PAULI || gates[i] == Operation::Type::S_PAULI)
-                {
-                    assert(stab_idx < stab_rows.size());
-
-                    add_stab(stab_rows[stab_idx++]);
-                }
-                else
-                    apply_gate(gates[i], qa[i], qb[i]);
-            }
         }
 
         void apply_gate(Operation::Type gate, size_t a, size_t b = SIZE_MAX)
@@ -253,77 +236,130 @@ namespace NWQEC
 
         void apply_h(size_t q)
         {
+            packed_t *NWQEC_RESTRICT x_ptr = x_row(q);
+            packed_t *NWQEC_RESTRICT z_ptr = z_row(q);
+            packed_t *NWQEC_RESTRICT r_ptr = r.data();
             for (size_t i = 0; i < cur_elements; i++)
             {
-                r[i] ^= (x[q][i] & z[q][i]);
-                std::swap(x[q][i], z[q][i]);
+                packed_t x_word = x_ptr[i];
+                packed_t z_word = z_ptr[i];
+                r_ptr[i] ^= (x_word & z_word);
+                x_ptr[i] = z_word;
+                z_ptr[i] = x_word;
             }
         }
 
         void apply_s(size_t q)
         {
+            const packed_t *NWQEC_RESTRICT x_ptr = x_row(q);
+            packed_t *NWQEC_RESTRICT z_ptr = z_row(q);
+            packed_t *NWQEC_RESTRICT r_ptr = r.data();
             for (size_t i = 0; i < cur_elements; i++)
             {
-                r[i] ^= (x[q][i] & z[q][i]);
-                z[q][i] ^= x[q][i];
+                packed_t x_word = x_ptr[i];
+                r_ptr[i] ^= (x_word & z_ptr[i]);
+                z_ptr[i] ^= x_word;
             }
         }
 
         void apply_sdg(size_t q)
         {
+            const packed_t *NWQEC_RESTRICT x_ptr = x_row(q);
+            packed_t *NWQEC_RESTRICT z_ptr = z_row(q);
+            packed_t *NWQEC_RESTRICT r_ptr = r.data();
             for (size_t i = 0; i < cur_elements; i++)
             {
-                r[i] ^= x[q][i] ^ (x[q][i] & z[q][i]);
-                z[q][i] ^= x[q][i];
+                packed_t x_word = x_ptr[i];
+                r_ptr[i] ^= x_word ^ (x_word & z_ptr[i]);
+                z_ptr[i] ^= x_word;
             }
         }
 
         void apply_sx(size_t q)
         {
+            packed_t *NWQEC_RESTRICT x_ptr = x_row(q);
+            const packed_t *NWQEC_RESTRICT z_ptr = z_row(q);
+            packed_t *NWQEC_RESTRICT r_ptr = r.data();
             for (size_t i = 0; i < cur_elements; i++)
             {
-                r[i] ^= (x[q][i] & z[q][i]) ^ z[q][i];
-                x[q][i] ^= z[q][i];
+                packed_t z_word = z_ptr[i];
+                r_ptr[i] ^= (x_ptr[i] & z_word) ^ z_word;
+                x_ptr[i] ^= z_word;
             }
         }
 
         void apply_sxdg(size_t q)
         {
+            packed_t *NWQEC_RESTRICT x_ptr = x_row(q);
+            const packed_t *NWQEC_RESTRICT z_ptr = z_row(q);
+            packed_t *NWQEC_RESTRICT r_ptr = r.data();
             for (size_t i = 0; i < cur_elements; i++)
             {
-                r[i] ^= (x[q][i] & z[q][i]);
-                x[q][i] ^= z[q][i];
+                packed_t z_word = z_ptr[i];
+                r_ptr[i] ^= (x_ptr[i] & z_word);
+                x_ptr[i] ^= z_word;
             }
         }
 
         void apply_cx(size_t ctrl, size_t targ)
         {
             assert(targ != SIZE_MAX);
+            const packed_t *NWQEC_RESTRICT x_ctrl_ptr = x_row(ctrl);
+            packed_t *NWQEC_RESTRICT z_ctrl_ptr = z_row(ctrl);
+            packed_t *NWQEC_RESTRICT x_targ_ptr = x_row(targ);
+            const packed_t *NWQEC_RESTRICT z_targ_ptr = z_row(targ);
+            packed_t *NWQEC_RESTRICT r_ptr = r.data();
             for (size_t i = 0; i < cur_elements; i++)
             {
-                r[i] ^= ((x[ctrl][i] & z[targ][i]) & (x[targ][i] ^ z[ctrl][i] ^ MAX_PACKED));
-                x[targ][i] ^= x[ctrl][i];
-                z[ctrl][i] ^= z[targ][i];
+                packed_t x_ctrl_word = x_ctrl_ptr[i];
+                packed_t z_targ_word = z_targ_ptr[i];
+                packed_t x_targ_word = x_targ_ptr[i];
+                packed_t z_ctrl_word = z_ctrl_ptr[i];
+                r_ptr[i] ^= ((x_ctrl_word & z_targ_word) & ~(x_targ_word ^ z_ctrl_word));
+                x_targ_ptr[i] = x_targ_word ^ x_ctrl_word;
+                z_ctrl_ptr[i] = z_ctrl_word ^ z_targ_word;
             }
         }
 
         void apply_pauli(Operation::Type gate, size_t q)
         {
+            const packed_t *NWQEC_RESTRICT xq = x_row(q);
+            const packed_t *NWQEC_RESTRICT zq = z_row(q);
             if (gate == Operation::Type::X)
                 for (size_t i = 0; i < cur_elements; i++)
-                    r[i] ^= z[q][i];
+                    r[i] ^= zq[i];
             else if (gate == Operation::Type::Y)
                 for (size_t i = 0; i < cur_elements; i++)
-                    r[i] ^= (x[q][i] ^ z[q][i]);
+                    r[i] ^= (xq[i] ^ zq[i]);
             else if (gate == Operation::Type::Z)
                 for (size_t i = 0; i < cur_elements; i++)
-                    r[i] ^= x[q][i];
+                    r[i] ^= xq[i];
         }
 
-        size_t n_qubits, local_rows, cur_elements, start_row_index;
-        int next_rank, str_len;
+        packed_t *x_row(size_t q)
+        {
+            return x_data.data() + q * elements_per_qubit;
+        }
 
-        std::vector<std::vector<packed_t>> x, z;
+        packed_t *z_row(size_t q)
+        {
+            return z_data.data() + q * elements_per_qubit;
+        }
+
+        const packed_t *x_row(size_t q) const
+        {
+            return x_data.data() + q * elements_per_qubit;
+        }
+
+        const packed_t *z_row(size_t q) const
+        {
+            return z_data.data() + q * elements_per_qubit;
+        }
+
+        size_t n_qubits, local_rows, cur_elements;
+        size_t elements_per_qubit = 0;
+
+        std::vector<packed_t> x_data, z_data;
         std::vector<packed_t> r;
     };
 

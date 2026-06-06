@@ -86,6 +86,36 @@ Clifford Reduction (`--cr`) is based on techniques from Wang et al. "Optimizing 
 ./nwqec-cli circuit.qasm --no-save
 ```
 
+### RZ Synthesis Error
+`nwqec-cli` uses a fixed absolute per-RZ synthesis tolerance by default:
+
+```bash
+./nwqec-cli circuit.qasm
+# equivalent to: --rz-err per-gate --epsilon 1e-10
+```
+
+The `--rz-err` policy controls how `--epsilon` is interpreted:
+
+| `--rz-err` | `--epsilon` omitted | With `--epsilon x` |
+|---|---:|---:|
+| omitted | per-gate `1e-10` | per-gate `x` |
+| `per-gate` | per-RZ epsilon `1e-10` | per-RZ epsilon `x` |
+| `total` | total budget `1e-2` | total budget `x` |
+| `relative` | `abs(theta) * 1e-2` | `abs(theta) * x` |
+
+For `total`, the budget is split evenly over all RZ occurrences after trivial-RZ cleanup.
+
+```bash
+# Fixed absolute error per synthesized RZ
+./nwqec-cli circuit.qasm --rz-err per-gate --epsilon 1e-12
+
+# Total RZ synthesis error budget
+./nwqec-cli circuit.qasm --rz-err total --epsilon 1e-2
+
+# Angle-relative synthesis error
+./nwqec-cli circuit.qasm --rz-err relative --epsilon 1e-3
+```
+
 ### Analysis Options
 ```bash
 # Remove Pauli gates from output

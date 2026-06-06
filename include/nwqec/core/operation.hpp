@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <iostream>
 #include <iomanip>
@@ -8,7 +9,6 @@
 #include <cmath>
 #include <sstream>
 #include <algorithm>
-#include <set>
 #include "pauli_op.hpp"
 
 namespace NWQEC
@@ -98,17 +98,46 @@ namespace NWQEC
         std::vector<size_t> active_qubits(const PauliOp &pauli_op) const
         {
             std::vector<size_t> involved_qubits;
-            
-            // Get X and Z indices from PauliOp and merge them
+
+            if (pauli_op.is_small())
+            {
+                uint64_t bits = pauli_op.get_x_bits_small() | pauli_op.get_z_bits_small();
+                involved_qubits.reserve(pauli_op.get_weight());
+                while (bits)
+                {
+                    int bit = pauli_op_ctz64(bits);
+                    if (static_cast<size_t>(bit) < pauli_op.get_num_qubits())
+                        involved_qubits.push_back(static_cast<size_t>(bit));
+                    bits &= bits - 1;
+                }
+                return involved_qubits;
+            }
+
             auto x_indices = pauli_op.get_x_indices();
             auto z_indices = pauli_op.get_z_indices();
-            
-            // Combine and sort unique indices
-            std::set<size_t> unique_indices;
-            unique_indices.insert(x_indices.begin(), x_indices.end());
-            unique_indices.insert(z_indices.begin(), z_indices.end());
-            
-            involved_qubits.assign(unique_indices.begin(), unique_indices.end());
+            involved_qubits.reserve(x_indices.size() + z_indices.size());
+
+            size_t x_pos = 0;
+            size_t z_pos = 0;
+            while (x_pos < x_indices.size() && z_pos < z_indices.size())
+            {
+                if (x_indices[x_pos] < z_indices[z_pos])
+                {
+                    involved_qubits.push_back(x_indices[x_pos++]);
+                }
+                else if (z_indices[z_pos] < x_indices[x_pos])
+                {
+                    involved_qubits.push_back(z_indices[z_pos++]);
+                }
+                else
+                {
+                    involved_qubits.push_back(x_indices[x_pos]);
+                    ++x_pos;
+                    ++z_pos;
+                }
+            }
+            involved_qubits.insert(involved_qubits.end(), x_indices.begin() + x_pos, x_indices.end());
+            involved_qubits.insert(involved_qubits.end(), z_indices.begin() + z_pos, z_indices.end());
             return involved_qubits;
         }
 
@@ -284,141 +313,302 @@ namespace NWQEC
             }
         }
 
-        // Convert string gate name to operation type
-        static Type name_to_type(const std::string &name)
+        static bool try_lowercase_name_to_type(std::string_view lowercase_name, Type &type)
         {
-            std::string lowercase_name = name;
-            std::transform(lowercase_name.begin(), lowercase_name.end(), lowercase_name.begin(), ::tolower);
-
             if (lowercase_name == "x")
-                return Type::X;
+            {
+                type = Type::X;
+                return true;
+            }
             if (lowercase_name == "y")
-                return Type::Y;
+            {
+                type = Type::Y;
+                return true;
+            }
             if (lowercase_name == "z")
-                return Type::Z;
+            {
+                type = Type::Z;
+                return true;
+            }
             if (lowercase_name == "h")
-                return Type::H;
+            {
+                type = Type::H;
+                return true;
+            }
             if (lowercase_name == "s")
-                return Type::S;
+            {
+                type = Type::S;
+                return true;
+            }
             if (lowercase_name == "sdg")
-                return Type::SDG;
+            {
+                type = Type::SDG;
+                return true;
+            }
             if (lowercase_name == "t")
-                return Type::T;
+            {
+                type = Type::T;
+                return true;
+            }
             if (lowercase_name == "tdg")
-                return Type::TDG;
+            {
+                type = Type::TDG;
+                return true;
+            }
             if (lowercase_name == "sx")
-                return Type::SX;
+            {
+                type = Type::SX;
+                return true;
+            }
             if (lowercase_name == "sxdg")
-                return Type::SXDG;
+            {
+                type = Type::SXDG;
+                return true;
+            }
             if (lowercase_name == "id")
-                return Type::ID;
+            {
+                type = Type::ID;
+                return true;
+            }
 
             // Parameterized single-qubit gates
             if (lowercase_name == "rx")
-                return Type::RX;
+            {
+                type = Type::RX;
+                return true;
+            }
             if (lowercase_name == "ry")
-                return Type::RY;
+            {
+                type = Type::RY;
+                return true;
+            }
             if (lowercase_name == "rz")
-                return Type::RZ;
+            {
+                type = Type::RZ;
+                return true;
+            }
             if (lowercase_name == "p")
-                return Type::P;
+            {
+                type = Type::P;
+                return true;
+            }
             if (lowercase_name == "u")
-                return Type::U;
+            {
+                type = Type::U;
+                return true;
+            }
             if (lowercase_name == "u1")
-                return Type::U1;
+            {
+                type = Type::U1;
+                return true;
+            }
             if (lowercase_name == "u2")
-                return Type::U2;
+            {
+                type = Type::U2;
+                return true;
+            }
             if (lowercase_name == "u3")
-                return Type::U3;
+            {
+                type = Type::U3;
+                return true;
+            }
 
             // Two-qubit gates
             if (lowercase_name == "cx")
-                return Type::CX;
+            {
+                type = Type::CX;
+                return true;
+            }
             if (lowercase_name == "cy")
-                return Type::CY;
+            {
+                type = Type::CY;
+                return true;
+            }
             if (lowercase_name == "cz")
-                return Type::CZ;
+            {
+                type = Type::CZ;
+                return true;
+            }
             if (lowercase_name == "ch")
-                return Type::CH;
+            {
+                type = Type::CH;
+                return true;
+            }
             if (lowercase_name == "cs")
-                return Type::CS;
+            {
+                type = Type::CS;
+                return true;
+            }
             if (lowercase_name == "csdg")
-                return Type::CSDG;
+            {
+                type = Type::CSDG;
+                return true;
+            }
             if (lowercase_name == "ct")
-                return Type::CT;
+            {
+                type = Type::CT;
+                return true;
+            }
             if (lowercase_name == "ctdg")
-                return Type::CTDG;
+            {
+                type = Type::CTDG;
+                return true;
+            }
             if (lowercase_name == "csx")
-                return Type::CSX;
+            {
+                type = Type::CSX;
+                return true;
+            }
             if (lowercase_name == "swap")
-                return Type::SWAP;
+            {
+                type = Type::SWAP;
+                return true;
+            }
             if (lowercase_name == "ecr")
-                return Type::ECR;
+            {
+                type = Type::ECR;
+                return true;
+            }
 
             // Parameterized two-qubit gates
             if (lowercase_name == "crx")
-                return Type::CRX;
+            {
+                type = Type::CRX;
+                return true;
+            }
             if (lowercase_name == "cry")
-                return Type::CRY;
+            {
+                type = Type::CRY;
+                return true;
+            }
             if (lowercase_name == "crz")
-                return Type::CRZ;
+            {
+                type = Type::CRZ;
+                return true;
+            }
             if (lowercase_name == "cp")
-                return Type::CP;
+            {
+                type = Type::CP;
+                return true;
+            }
             if (lowercase_name == "cu")
-                return Type::CU;
+            {
+                type = Type::CU;
+                return true;
+            }
             if (lowercase_name == "cu1")
-                return Type::CU1;
+            {
+                type = Type::CU1;
+                return true;
+            }
             if (lowercase_name == "cu3")
-                return Type::CU3;
+            {
+                type = Type::CU3;
+                return true;
+            }
             if (lowercase_name == "rxx")
-                return Type::RXX;
+            {
+                type = Type::RXX;
+                return true;
+            }
             if (lowercase_name == "ryy")
-                return Type::RYY;
+            {
+                type = Type::RYY;
+                return true;
+            }
             if (lowercase_name == "rzz")
-                return Type::RZZ;
+            {
+                type = Type::RZZ;
+                return true;
+            }
 
             // Three-qubit gates
             if (lowercase_name == "ccx")
-                return Type::CCX;
+            {
+                type = Type::CCX;
+                return true;
+            }
             if (lowercase_name == "cswap")
-                return Type::CSWAP;
+            {
+                type = Type::CSWAP;
+                return true;
+            }
             if (lowercase_name == "rccx")
-                return Type::RCCX;
+            {
+                type = Type::RCCX;
+                return true;
+            }
             // Measurement
             if (lowercase_name == "measure")
-                return Type::MEASURE;
+            {
+                type = Type::MEASURE;
+                return true;
+            }
             // Reset
             if (lowercase_name == "reset")
-                return Type::RESET;
+            {
+                type = Type::RESET;
+                return true;
+            }
             // Barrier
             if (lowercase_name == "barrier")
-                return Type::BARRIER;
+            {
+                type = Type::BARRIER;
+                return true;
+            }
 
             if (lowercase_name == "t_pauli")
-                return Type::T_PAULI;
+            {
+                type = Type::T_PAULI;
+                return true;
+            }
             if (lowercase_name == "m_pauli")
-                return Type::M_PAULI;
+            {
+                type = Type::M_PAULI;
+                return true;
+            }
             if (lowercase_name == "s_pauli")
-                return Type::S_PAULI;
+            {
+                type = Type::S_PAULI;
+                return true;
+            }
             if (lowercase_name == "z_pauli")
-                return Type::Z_PAULI;
+            {
+                type = Type::Z_PAULI;
+                return true;
+            }
             if (lowercase_name == "swap_basis")
-                return Type::SWAP_BASIS;
+            {
+                type = Type::SWAP_BASIS;
+                return true;
+            }
+
+            return false;
+        }
+
+        static bool try_name_to_type(const std::string &name, Type &type)
+        {
+            std::string lowercase_name = name;
+            std::transform(lowercase_name.begin(), lowercase_name.end(), lowercase_name.begin(), ::tolower);
+            return try_lowercase_name_to_type(lowercase_name, type);
+        }
+
+        // Convert string gate name to operation type
+        static Type name_to_type(const std::string &name)
+        {
+            Type type;
+            if (try_name_to_type(name, type))
+            {
+                return type;
+            }
 
             throw std::runtime_error("Unknown gate: " + name);
         }
 
         static bool is_builtin_gate(const std::string &name)
         {
-            try
-            {
-                name_to_type(name);
-                return true;
-            }
-            catch (const std::runtime_error &)
-            {
-                return false;
-            }
+            Type type;
+            return try_name_to_type(name, type);
         }
 
         std::string get_parameter_string(double param_value, int precision = 10, double eps = 1e-10) const

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "nwqec/core/circuit.hpp"
+#include "nwqec/core/constants.hpp"
 #include "nwqec/core/transpiler_passes.hpp"
 
 #include "nwqec/passes/clifford_reduction_pass.hpp"
@@ -15,6 +16,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <optional>
 #include <iostream>
 #include <iomanip>
 
@@ -26,7 +28,8 @@ namespace NWQEC {
 struct PassConfig {
     bool keep_ccx = false;          // Preserve CCX gates during decomposition
     bool keep_cx = false;           // Preserve CX gates in PBC format
-    double epsilon_override = -1.0; // Override epsilon for RZ synthesis (-1 = use default)
+    RzErrorPolicy rz_error_policy = DEFAULT_RZ_ERROR_POLICY;
+    std::optional<double> rz_error_epsilon = std::nullopt;
     bool silent = false;            // Suppress output during pass execution
 };
 
@@ -74,7 +77,7 @@ private:
     /**
      * @brief Print execution statistics for a pass
      */
-    void print_pass_stats(const std::string& pass_name, const Circuit& before, const Circuit& after, bool modified);
+    void print_pass_stats(const std::string& pass_name, size_t gates_before, const Circuit& after, bool modified, size_t depth_after);
     
     /**
      * @brief Print table header for pass execution log
@@ -93,6 +96,8 @@ inline std::unique_ptr<Circuit> Transpiler::execute_passes(
         print_table_header();
     }
 
+    std::optional<size_t> cached_depth;
+
     for (PassType pass_type : passes) {
         auto pass = create_pass(pass_type, config);
         if (!pass) {
@@ -102,11 +107,14 @@ inline std::unique_ptr<Circuit> Transpiler::execute_passes(
             continue;
         }
 
-        Circuit before_copy = *circuit; // For stats
+        const size_t gates_before = circuit->get_operations().size();
         bool modified = pass->run(*circuit);
         
         if (!config.silent) {
-            print_pass_stats(pass_type_to_string(pass_type), before_copy, *circuit, modified);
+            if (modified || !cached_depth.has_value()) {
+                cached_depth = circuit->depth();
+            }
+            print_pass_stats(pass_type_to_string(pass_type), gates_before, *circuit, modified, *cached_depth);
         }
     }
 
@@ -139,11 +147,8 @@ inline std::unique_ptr<Pass> Transpiler::create_pass(PassType type, const PassCo
             return std::make_unique<CRPass>();
         
         case PassType::SYNTHESIZE_RZ: {
-            if (config.epsilon_override >= 0.0) {
-                return std::make_unique<SynthesizeRzPass>(config.epsilon_override);
-            } else {
-                return std::make_unique<SynthesizeRzPass>();
-            }
+            double epsilon = config.rz_error_epsilon.value_or(default_rz_error_epsilon(config.rz_error_policy));
+            return std::make_unique<SynthesizeRzPass>(config.rz_error_policy, epsilon);
         }
         
         case PassType::TFUSE:
@@ -165,20 +170,15 @@ inline void Transpiler::print_table_header() {
     std::cout << std::string(75, '-') << std::endl;
 }
 
-inline void Transpiler::print_pass_stats(const std::string& pass_name, const Circuit& before, const Circuit& after, bool modified) {
-    auto before_ops = before.count_ops();
-    auto after_ops = after.count_ops();
-    
-    int before_total = 0, after_total = 0;
-    for (const auto& [gate, count] : before_ops) before_total += count;
-    for (const auto& [gate, count] : after_ops) after_total += count;
-    
+inline void Transpiler::print_pass_stats(const std::string& pass_name, size_t gates_before, const Circuit& after, bool modified, size_t depth_after) {
+    const size_t gates_after = after.get_operations().size();
+
     std::cout << std::left
               << std::setw(25) << pass_name
               << std::setw(10) << (modified ? "Yes" : "No")
-              << std::setw(15) << before_total
-              << std::setw(15) << after_total
-              << std::setw(10) << after.depth()
+              << std::setw(15) << gates_before
+              << std::setw(15) << gates_after
+              << std::setw(10) << depth_after
               << std::endl;
 }
 

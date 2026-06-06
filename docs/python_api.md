@@ -19,29 +19,49 @@ Keyword-only options must be supplied by name (see bullet lists). Each function 
   - `path`: filesystem path to an OpenQASM 2.0 file.
   - Parses the file into a circuit.
 
-- **`to_clifford_t(circuit: Circuit, keep_ccx: bool = False, epsilon: float | None = None) -> Circuit`**
+- **`to_clifford_t(circuit: Circuit, keep_ccx: bool = False, rz_err: str = "per-gate", epsilon: float | None = None) -> Circuit`**
   - `circuit`: source circuit.
   - `keep_ccx`: preserve CCX gates when `True`.
-  - `epsilon`: absolute error tolerance for RZ synthesis; defaults to `abs(theta) * DEFAULT_EPSILON_MULTIPLIER` per angle.
+  - `rz_err`: RZ synthesis error policy: `"per-gate"`, `"total"`, or `"relative"`.
+  - `epsilon`: optional value for the selected policy.
   - Produces a Clifford+T-only circuit.
 
-- **`to_pbc(circuit: Circuit, keep_cx: bool = False, optimize_t_count: bool = False, epsilon: float | None = None) -> Circuit`**
+- **`to_pbc(circuit: Circuit, keep_cx: bool = False, optimize_t_count: bool = False, rz_err: str = "per-gate", epsilon: float | None = None) -> Circuit`**
   - `circuit`: source circuit.
   - `keep_cx`: preserve CX gates where possible in the PBC form.
   - `optimize_t_count`: apply T-count optimization after PBC conversion.
-  - `epsilon`: absolute error tolerance for RZ synthesis.
+  - `rz_err`: RZ synthesis error policy.
+  - `epsilon`: optional value for the selected policy.
   - Transpiles the circuit to a Pauli-Based Circuit (PBC).
 
-- **`to_clifford_reduction(circuit: Circuit, epsilon: float | None = None) -> Circuit`**
+- **`to_clifford_reduction(circuit: Circuit, rz_err: str = "per-gate", epsilon: float | None = None) -> Circuit`**
   - `circuit`: source circuit.
-  - `epsilon`: absolute error tolerance for RZ synthesis.
+  - `rz_err`: RZ synthesis error policy.
+  - `epsilon`: optional value for the selected policy.
   - Applies the Clifford reduction optimization (preserves parallelism while reducing non-T overhead).
   - Based on the technique from Wang et al. "Optimizing FTQC Programs through QEC Transpiler and Architecture Codesign" (2024).
 
-- **`fuse_t(circuit: Circuit, epsilon: float | None = None) -> Circuit`**
+- **`fuse_t(circuit: Circuit, rz_err: str = "per-gate", epsilon: float | None = None) -> Circuit`**
   - `circuit`: source circuit, consisting exclusively of Pauli-based operations.
-  - `epsilon`: absolute error tolerance for any remaining RZ synthesis.
+  - `rz_err`: RZ synthesis error policy.
+  - `epsilon`: optional value for any remaining RZ synthesis.
   - Applies the Tfuse optimisation to reduce T rotations.
+
+### RZ Synthesis Error
+All transforms that synthesize RZ gates accept `rz_err` and `epsilon`.
+
+| `rz_err` | `epsilon` | Effective behavior |
+|---|---:|---|
+| omitted | omitted | `per-gate`, `epsilon = 1e-10` |
+| omitted | `x` | `per-gate`, `epsilon = x` |
+| `"per-gate"` | omitted | `per_rz_epsilon = 1e-10` |
+| `"per-gate"` | `x` | `per_rz_epsilon = x` |
+| `"total"` | omitted | total budget `1e-2`, split over all RZ occurrences |
+| `"total"` | `x` | total budget `x`, split over all RZ occurrences |
+| `"relative"` | omitted | `per_rz_epsilon(theta) = abs(theta) * 1e-2` |
+| `"relative"` | `x` | `per_rz_epsilon(theta) = abs(theta) * x` |
+
+`epsilon` must be positive. `rz_err` must be one of `"per-gate"`, `"total"`, or `"relative"`.
 
 Circuit Class
 -------------
@@ -107,8 +127,11 @@ c = nwqec.load_qasm("example_circuits/qft_n18.qasm")
 print(c.stats())
 
 # Clifford+T conversion (default)
-ct = nwqec.to_clifford_t(c, keep_ccx=False, epsilon=1e-10)
+ct = nwqec.to_clifford_t(c, keep_ccx=False)
 print("Clifford+T gate counts:", ct.count_ops())
+
+# Use a total RZ synthesis error budget
+ct_budgeted = nwqec.to_clifford_t(c, rz_err="total", epsilon=1e-2)
 
 # PBC conversion
 pbc = nwqec.to_pbc(c, keep_cx=False)

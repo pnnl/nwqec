@@ -364,12 +364,20 @@ install(FILES
 # =============================================================================
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(test_qasm_parser tests/cpp/test_qasm_parser.cpp)
+    target_link_libraries(test_qasm_parser PRIVATE nwqec_gridsynth)
+    target_compile_options(test_qasm_parser PRIVATE ${COMMON_COMPILE_OPTIONS})
+
     add_test(NAME nwqec_help
              COMMAND $<TARGET_FILE:nwqec-cli> -h)
     add_test(NAME nwqec_qft
-             COMMAND $<TARGET_FILE:nwqec-cli> --qft 4 --no-save)
+             COMMAND $<TARGET_FILE:nwqec-cli> --qft 4 --no-save --rz-err relative --epsilon 1e-2)
+    add_test(NAME nwqec_rz_error_total
+             COMMAND $<TARGET_FILE:nwqec-cli> --qft 2 --no-save --rz-err total --epsilon 1e-2)
     add_test(NAME gridsynth_basic
              COMMAND $<TARGET_FILE:gridsynth> pi/4 10)
+    add_test(NAME qasm_parser_regression
+             COMMAND $<TARGET_FILE:test_qasm_parser>)
 endif()
 
 # =============================================================================

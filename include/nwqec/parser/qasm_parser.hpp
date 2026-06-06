@@ -1,16 +1,11 @@
 #pragma once
 
-#include "nwqec/parser/token.hpp"
-#include "nwqec/parser/lexer.hpp"
-#include "nwqec/parser/ast.hpp"
-#include "nwqec/parser/ast_generator.hpp"
-#include "nwqec/parser/ast_converter.hpp"
+#include "nwqec/parser/circuit_parser.hpp"
 
 #include "nwqec/core/circuit.hpp"
 
 #include <string>
 #include <fstream>
-#include <sstream>
 #include <iostream>
 #include <memory>
 
@@ -23,7 +18,6 @@ namespace NWQEC
     class QASMParser
     {
     private:
-        std::unique_ptr<ASTProgram> program;
         std::unique_ptr<Circuit> circuit;
         std::string lastError;
         bool hasError = false;
@@ -39,33 +33,13 @@ namespace NWQEC
         {
             hasError = false;
             lastError = "";
+            circuit.reset();
 
             try
             {
-                // Lexical analysis
-                Lexer lexer(source);
-                std::vector<Token> tokens = lexer.tokenize();
-
-                // Check for lexer errors
-                for (const auto &token : tokens)
-                {
-                    if (token.type == TokenType::INVALID)
-                    {
-                        lastError = "Lexical error at line " + std::to_string(token.line) +
-                                    ", column " + std::to_string(token.column) +
-                                    ": Invalid token '" + token.lexeme + "'";
-                        hasError = true;
-                        return false;
-                    }
-                }
-
-                // Parse tokens into AST
-                ASTGenerator ast_gen(tokens);
-                program = std::make_unique<ASTProgram>(ast_gen.parse());
-
-                // Build the flattened circuit
-                ASTCircuitConverter builder;
-                circuit = std::make_unique<Circuit>(builder.build(program.get()));
+                // Build the flattened circuit directly from tokens.
+                CircuitParser circuit_parser(source);
+                circuit = std::make_unique<Circuit>(circuit_parser.parse());
 
                 return true;
             }
@@ -85,7 +59,7 @@ namespace NWQEC
          */
         bool parse_file(const std::string &filename)
         {
-            std::ifstream file(filename);
+            std::ifstream file(filename, std::ios::binary | std::ios::ate);
             if (!file.is_open())
             {
                 lastError = "Could not open file: " + filename;
@@ -93,21 +67,24 @@ namespace NWQEC
                 return false;
             }
 
-            std::stringstream buffer;
-            buffer << file.rdbuf();
-            return parse_string(buffer.str());
-        }
+            const std::streamsize size = file.tellg();
+            if (size < 0)
+            {
+                lastError = "Could not determine file size: " + filename;
+                hasError = true;
+                return false;
+            }
 
-        /**
-         * Get the parsed program (AST representation)
-         *
-         * @return pointer to the parsed program, or nullptr if parsing failed
-         */
-        const ASTProgram *get_program() const
-        {
-            if (hasError || !program)
-                return nullptr;
-            return program.get();
+            std::string source(static_cast<size_t>(size), '\0');
+            file.seekg(0, std::ios::beg);
+            if (size > 0 && !file.read(source.data(), size))
+            {
+                lastError = "Could not read file: " + filename;
+                hasError = true;
+                return false;
+            }
+
+            return parse_string(source);
         }
 
         /**
@@ -140,31 +117,6 @@ namespace NWQEC
         const std::string &get_error_message() const
         {
             return lastError;
-        }
-
-        /**
-         * Execute the parsed program
-         *
-         * @return true if execution succeeded, false otherwise
-         */
-        bool execute()
-        {
-            if (hasError || !program)
-            {
-                return false;
-            }
-
-            try
-            {
-                program->execute();
-                return true;
-            }
-            catch (const std::exception &e)
-            {
-                lastError = "Execution error: " + std::string(e.what());
-                hasError = true;
-                return false;
-            }
         }
 
         /**

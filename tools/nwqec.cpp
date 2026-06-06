@@ -5,11 +5,10 @@
 #include <sstream>
 #include <string>
 #include <memory>
-#include <chrono>
-#include <iomanip>
 #include <filesystem>
 #include <cmath>
 #include <fstream>
+#include <stdexcept>
 
 // PROJECT_ROOT_DIR is defined by CMake during compilation
 // This fallback is for IDE IntelliSense support only
@@ -19,6 +18,33 @@
 
 std::unique_ptr<NWQEC::Circuit> generate_qft_circuit(int n_qubits);
 std::unique_ptr<NWQEC::Circuit> generate_shor_circuit(int n_bits);
+
+NWQEC::RzErrorPolicy parse_rz_err_policy(const std::string &rz_err)
+{
+    if (rz_err == "per-gate")
+        return NWQEC::RzErrorPolicy::PER_GATE;
+    if (rz_err == "total")
+        return NWQEC::RzErrorPolicy::TOTAL;
+    if (rz_err == "relative")
+        return NWQEC::RzErrorPolicy::RELATIVE;
+
+    throw std::invalid_argument("RZ error policy must be one of: per-gate, total, relative");
+}
+
+const char *rz_err_policy_name(NWQEC::RzErrorPolicy policy)
+{
+    switch (policy)
+    {
+    case NWQEC::RzErrorPolicy::PER_GATE:
+        return "per-gate";
+    case NWQEC::RzErrorPolicy::TOTAL:
+        return "total";
+    case NWQEC::RzErrorPolicy::RELATIVE:
+        return "relative";
+    default:
+        return "unknown";
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -39,6 +65,9 @@ int main(int argc, char *argv[])
     bool remove_pauli = false;
     bool keep_ccx = false;
     bool keep_cx = false;
+    std::string rz_err_arg = "per-gate";
+    bool epsilon_specified = false;
+    double epsilon_value = NWQEC::DEFAULT_RZ_PER_GATE_EPSILON;
 
     // Helper function to print usage
     auto print_usage = [&](bool detailed = false)
@@ -66,6 +95,8 @@ int main(int argc, char *argv[])
         std::cout << "  --pbc                 Convert to Pauli-Based Circuit (PBC) format" << std::endl;
         std::cout << "  --cr                  Apply Clifford Reduction optimization" << std::endl;
         std::cout << "  --t-opt               Apply T-count optimization (works on PBC circuits)" << std::endl;
+        std::cout << "  --rz-err <policy>     RZ synthesis error policy: per-gate, total, or relative" << std::endl;
+        std::cout << "  --epsilon <value>     Value used by the selected RZ error policy" << std::endl;
         std::cout << "  --keep-ccx            Preserve CCX gates during Clifford+T conversion" << std::endl;
         std::cout << "  --keep-cx             Preserve CX gates during PBC conversion" << std::endl;
         std::cout << "" << std::endl;
@@ -107,6 +138,9 @@ int main(int argc, char *argv[])
             std::cout << "  " << argv[0] << " circuit.qasm --cr" << std::endl;
             std::cout << "    Apply Clifford Reduction optimization" << std::endl;
             std::cout << "" << std::endl;
+            std::cout << "  " << argv[0] << " circuit.qasm --rz-err total --epsilon 1e-2" << std::endl;
+            std::cout << "    Use a total RZ synthesis error budget split over all RZ gates" << std::endl;
+            std::cout << "" << std::endl;
             std::cout << "  " << argv[0] << " circuit.qasm -o my_output.qasm" << std::endl;
             std::cout << "    Transpile and save to custom filename" << std::endl;
             std::cout << "" << std::endl;
@@ -121,12 +155,13 @@ int main(int argc, char *argv[])
             std::cout << "  - CCX preservation (--keep-ccx) applies to Clifford+T conversion" << std::endl;
             std::cout << "  - CX preservation (--keep-cx) applies to PBC conversion" << std::endl;
             std::cout << "  - Clifford Reduction (--cr) optimizes circuit depth while preserving parallelism" << std::endl;
+            std::cout << "  - Default RZ synthesis error is per-gate with epsilon=1e-10" << std::endl;
+            std::cout << "  - --rz-err total uses epsilon as the total budget; default total epsilon is 1e-2" << std::endl;
+            std::cout << "  - --rz-err relative uses epsilon as a factor: per-gate epsilon = |theta| * epsilon" << std::endl;
             std::cout << "  - Output files use '_transpiled.qasm' suffix by default" << std::endl;
         }
     };
 
-    // Use example string or file from command line
-    auto start_parse = std::chrono::high_resolution_clock::now();
     if (argc < 2)
     {
         print_usage();
@@ -254,6 +289,51 @@ int main(int argc, char *argv[])
             t_pauli_opt = true;
             std::cout << "T Pauli optimizer enabled" << std::endl;
         }
+        else if (arg == "--rz-err")
+        {
+            if (arg_index + 1 >= argc)
+            {
+                std::cout << "Error: --rz-err requires a policy: per-gate, total, or relative" << std::endl;
+                return 1;
+            }
+            arg_index++;
+            rz_err_arg = argv[arg_index];
+            try
+            {
+                (void)parse_rz_err_policy(rz_err_arg);
+            }
+            catch (const std::exception &e)
+            {
+                std::cout << "Error: " << e.what() << std::endl;
+                return 1;
+            }
+            std::cout << "RZ error policy set to: " << rz_err_arg << std::endl;
+        }
+        else if (arg == "--epsilon")
+        {
+            if (arg_index + 1 >= argc)
+            {
+                std::cout << "Error: --epsilon requires a positive numeric value" << std::endl;
+                return 1;
+            }
+            arg_index++;
+            try
+            {
+                epsilon_value = std::stod(argv[arg_index]);
+                if (!(epsilon_value > 0.0) || !std::isfinite(epsilon_value))
+                {
+                    std::cout << "Error: --epsilon must be a positive finite number, got: " << argv[arg_index] << std::endl;
+                    return 1;
+                }
+                epsilon_specified = true;
+            }
+            catch (const std::exception &e)
+            {
+                std::cout << "Error: invalid --epsilon value: '" << argv[arg_index] << "'" << std::endl;
+                return 1;
+            }
+            std::cout << "RZ error epsilon set to: " << epsilon_value << std::endl;
+        }
         else if (arg == "--remove-pauli")
         {
             remove_pauli = true;
@@ -322,6 +402,21 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    NWQEC::RzErrorPolicy rz_error_policy;
+    try
+    {
+        rz_error_policy = parse_rz_err_policy(rz_err_arg);
+    }
+    catch (const std::exception &e)
+    {
+        std::cout << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    if (!epsilon_specified)
+    {
+        epsilon_value = NWQEC::default_rz_error_epsilon(rz_error_policy);
+    }
+
     // Show configuration summary
     {
         std::cout << "\n==== Configuration Summary ====" << std::endl;
@@ -374,6 +469,8 @@ int main(int argc, char *argv[])
             }
             std::cout << std::endl;
         }
+        std::cout << "RZ error: " << rz_err_policy_name(rz_error_policy)
+                  << ", epsilon=" << epsilon_value << std::endl;
         if (!save_to_file)
             std::cout << "Output: No file will be saved" << std::endl;
         else if (!output_filename.empty())
@@ -406,9 +503,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    auto end_parse = std::chrono::high_resolution_clock::now();
-    auto parse_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_parse - start_parse).count();
-
     if (!success)
     {
         if (generate_qft)
@@ -430,11 +524,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    auto start_circuit = std::chrono::high_resolution_clock::now();
-    // circuit is already obtained above
-    auto end_circuit = std::chrono::high_resolution_clock::now();
-    auto circuit_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_circuit - start_circuit).count();
-
     std::cout << "Circuit contains " << circuit->get_num_qubits() << " qubits, "
               << circuit->get_num_bits() << " classical bits, and "
               << circuit->get_operations().size() << " operations." << std::endl;
@@ -444,13 +533,14 @@ int main(int argc, char *argv[])
     }
 
     // Apply transpilation passes
-    auto start_transpile = std::chrono::high_resolution_clock::now();
     try
     {
         NWQEC::Transpiler transpiler;
         NWQEC::PassConfig config;
         config.keep_ccx = keep_ccx;
         config.keep_cx = keep_cx;
+        config.rz_error_policy = rz_error_policy;
+        config.rz_error_epsilon = epsilon_value;
         config.silent = false;  // CLI always shows output
         
         // Choose the appropriate pass sequence based on the logical workflow
@@ -489,13 +579,7 @@ int main(int argc, char *argv[])
         std::cerr << "  - Insufficient memory for large circuits" << std::endl;
         return 1;
     }
-    auto end_transpile = std::chrono::high_resolution_clock::now();
-    auto transpile_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_transpile - start_transpile).count();
-
-    circuit->print_stats(std::cout);
-
     // save the circuit to a file with the name of the input file + _transpiled.qasm
-    auto start_save = std::chrono::high_resolution_clock::now();
     std::string filename;
     if (save_to_file)
     {
@@ -532,23 +616,6 @@ int main(int argc, char *argv[])
             std::cout << "Saved transpiled circuit to: " << filename << std::endl;
         }
     }
-
-    auto end_save = std::chrono::high_resolution_clock::now();
-    auto save_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_save - start_save).count();
-
-    // Print timing results
-    // Print timing results
-    std::cout << "\n---- Performance Metrics ----" << std::endl;
-    std::cout << std::left << std::setw(20) << "Parsing time:"
-              << std::right << std::setw(5) << parse_time << " ms" << std::endl;
-    std::cout << std::left << std::setw(20) << "Conversion time:"
-              << std::right << std::setw(5) << circuit_time << " ms" << std::endl;
-    std::cout << std::left << std::setw(20) << "Transpilation time:"
-              << std::right << std::setw(5) << transpile_time << " ms" << std::endl;
-    std::cout << std::left << std::setw(20) << "Write to file:"
-              << std::right << std::setw(5) << save_time << " ms" << std::endl;
-    std::cout << std::left << std::setw(20) << "Total time:"
-              << std::right << std::setw(5) << (parse_time + circuit_time + transpile_time + save_time) << " ms" << std::endl;
 
     return 0;
 }

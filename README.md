@@ -60,9 +60,15 @@ import nwqec
 circuit = nwqec.load_qasm("example_circuits/qft_n18.qasm")
 print(circuit.stats())
 
-clifford_t = nwqec.to_clifford_t(circuit, keep_ccx=False, epsilon=1e-10)
+clifford_t = nwqec.to_clifford_t(circuit, keep_ccx=False)
 print("WITH_GRIDSYNTH_CPP:", nwqec.WITH_GRIDSYNTH_CPP)
 print("Clifford+T gate counts:", clifford_t.count_ops())
+
+# Optional RZ synthesis error policies:
+#   per-gate: fixed epsilon per RZ (default 1e-10)
+#   total:    total budget split over all RZ gates (default 1e-2)
+#   relative: epsilon(theta) = abs(theta) * epsilon (default 1e-2)
+budgeted = nwqec.to_clifford_t(circuit, rz_err="total", epsilon=1e-2)
 
 # Pauli-Based Circuit + Tfuse
 pbc = nwqec.to_pbc(circuit)

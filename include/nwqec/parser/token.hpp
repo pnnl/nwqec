@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 #include <unordered_map>
@@ -63,12 +64,12 @@ namespace NWQEC
     struct Token
     {
         TokenType type;
-        std::string lexeme;
+        std::string_view lexeme;
         int line;
         int column;
 
-        Token(TokenType type, std::string lexeme, int line, int column)
-            : type(type), lexeme(std::move(lexeme)), line(line), column(column) {}
+        Token(TokenType type, std::string_view lexeme, int line, int column)
+            : type(type), lexeme(lexeme), line(line), column(column) {}
 
         std::string to_string() const
         {
@@ -178,7 +179,7 @@ namespace NWQEC
                 break;
             }
 
-            return "Token(" + typeStr + ", '" + lexeme + "', line=" +
+            return "Token(" + typeStr + ", '" + std::string(lexeme) + "', line=" +
                    std::to_string(line) + ", col=" + std::to_string(column) + ")";
         }
     };

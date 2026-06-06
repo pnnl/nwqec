@@ -29,12 +29,18 @@ def test_load_and_stats(tmp_path):
     counts = circuit.count_ops()
     assert isinstance(counts, dict)
 
-    clifford = nwqec.to_clifford_t(circuit, epsilon=1e-6)
+    clifford = nwqec.to_clifford_t(circuit, rz_err="per-gate", epsilon=1e-6)
     assert clifford.is_clifford_t()
 
-    pbc = nwqec.to_pbc(circuit, epsilon=1e-6)
+    pbc = nwqec.to_pbc(circuit, rz_err="relative", epsilon=1e-2)
     fused = nwqec.fuse_t(pbc)
     assert fused.count_ops().get("t_pauli", 0) <= pbc.count_ops().get("t_pauli", 0)
+
+    budgeted = nwqec.to_clifford_t(circuit, rz_err="total", epsilon=1e-2)
+    assert budgeted.is_clifford_t()
+
+    with pytest.raises(Exception, match="rz_err"):
+        nwqec.to_clifford_t(circuit, rz_err="absolute")
 
     out_file = tmp_path / "out.qasm"
     clifford.to_qasm_file(str(out_file))
